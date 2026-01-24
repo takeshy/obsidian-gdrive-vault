@@ -19,7 +19,7 @@ import {
 } from "./actions";
 import { DriveSettings, DEFAULT_CONFLICT_FOLDER, META_FILE_NAME_REMOTE } from "./sync/types";
 import { SyncEngine } from "./sync/sync-engine";
-import { dialogStyles, ConfirmDialog, DeleteExcludedFilesDialog } from "./sync/dialogs";
+import { dialogStyles, ConfirmDialog, DeleteExcludedFilesDialog, OrphanFilesDialog } from "./sync/dialogs";
 import { t } from "./sync/i18n";
 import { readLocalMeta, shouldExclude, readRemoteMeta, writeRemoteMeta } from "./sync/meta";
 import { OAUTH_CONFIG } from "./config";
@@ -631,6 +631,45 @@ class SyncSettingsTab extends PluginSettingTab {
 
 		// Load excluded files asynchronously
 		this.loadExcludedFiles(excludedFilesList, loadingEl);
+
+		// Orphan files management
+		new Setting(containerEl)
+			.setName(t("orphanFilesButton"))
+			.setDesc(t("orphanFilesButtonDesc"))
+			.addButton((button) => {
+				button.setButtonText(t("orphanFilesButton"));
+				button.onClick(async () => {
+					if (!this.plugin.syncEngine) {
+						new Notice(t("syncEngineNotInit"));
+						return;
+					}
+
+					button.setDisabled(true);
+					button.setButtonText(t("loading"));
+
+					try {
+						const orphanFiles = await this.plugin.syncEngine.getOrphanFiles();
+						button.setButtonText(t("orphanFilesButton"));
+						button.setDisabled(false);
+
+						new OrphanFilesDialog(
+							this.app,
+							orphanFiles.map(f => ({ id: f.id, name: f.name })),
+							async (fileIds: string[]) => {
+								if (this.plugin.syncEngine) {
+									const deleted = await this.plugin.syncEngine.deleteOrphanFiles(fileIds);
+									new Notice(t("orphanFilesDeleted", { count: deleted.toString() }));
+								}
+							}
+						).open();
+					} catch (err) {
+						console.error("Failed to get orphan files:", err);
+						new Notice(t("loadFailed"));
+						button.setButtonText(t("orphanFilesButton"));
+						button.setDisabled(false);
+					}
+				});
+			});
 
 		containerEl.createEl("h3", { text: t("fullSyncOperations") });
 

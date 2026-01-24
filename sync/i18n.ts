@@ -136,6 +136,16 @@ const translations = {
 		skippedUnchanged: 'Skipped {count} unchanged file(s)',
 		uploadComplete: 'Upload Complete',
 		downloadComplete: 'Download Complete',
+
+		// Orphan Files
+		orphanFilesTitle: 'Orphan Files',
+		orphanFilesDesc: 'Files on Google Drive not tracked in sync metadata. These files will not be synced to other devices.',
+		orphanFilesButton: 'Detect Orphan Files',
+		orphanFilesButtonDesc: 'Find and delete files on Google Drive that are not tracked in metadata',
+		noOrphanFiles: 'No orphan files found.',
+		selectAll: 'Select All',
+		deleteSelected: 'Delete Selected ({count})',
+		orphanFilesDeleted: 'Deleted {count} orphan file(s)',
 	},
 	ja: {
 		// Common
@@ -268,6 +278,16 @@ const translations = {
 		skippedUnchanged: '未変更の{count}ファイルをスキップしました',
 		uploadComplete: 'アップロード完了',
 		downloadComplete: 'ダウンロード完了',
+
+		// Orphan Files
+		orphanFilesTitle: 'Orphanファイル',
+		orphanFilesDesc: 'Google Drive上にあるが同期メタデータで追跡されていないファイル。これらのファイルは他のデバイスに同期されません。',
+		orphanFilesButton: 'Orphanファイルを検出',
+		orphanFilesButtonDesc: 'メタデータで追跡されていないGoogle Drive上のファイルを検出・削除',
+		noOrphanFiles: 'Orphanファイルは見つかりませんでした。',
+		selectAll: 'すべて選択',
+		deleteSelected: '選択を削除 ({count})',
+		orphanFilesDeleted: '{count}個のOrphanファイルを削除しました',
 	},
 };
 

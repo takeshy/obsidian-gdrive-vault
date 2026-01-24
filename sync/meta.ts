@@ -157,6 +157,10 @@ export async function buildMetaFromVault(
 	const files = vault.getFiles();
 
 	for (const file of files) {
+		// Skip meta files
+		if (file.path === META_FILE_NAME_LOCAL || file.path === META_FILE_NAME_REMOTE) {
+			continue;
+		}
 		if (shouldExclude(file.path, excludePatterns)) {
 			continue;
 		}

@@ -394,7 +394,6 @@ export class SyncEngine {
 
 		try {
 			const toUpload: string[] = [];
-			const toDelete: string[] = [];
 			const updatedFiles: UpdatedFileInfo[] = [];
 
 			// Determine what to upload
@@ -413,17 +412,7 @@ export class SyncEngine {
 				}
 			}
 
-			// Determine what to delete on remote
-			if (remoteMeta) {
-				for (const path of Object.keys(remoteMeta.files)) {
-					if (!localMeta.files[path] && !shouldExclude(path, this.settings.excludePatterns)) {
-						toDelete.push(path);
-					}
-				}
-			}
-
-			const total = toUpload.length + toDelete.length;
-			progress.setTotal(total);
+			progress.setTotal(toUpload.length);
 
 			let completed = 0;
 
@@ -455,21 +444,8 @@ export class SyncEngine {
 				progress.setProgress(completed, `Uploading: ${path}`);
 			});
 
-			// Delete remote files in parallel
-			await parallelProcess(toDelete, async (path) => {
-				const driveFile = filesList.find(f => f.name === path);
-				if (driveFile) {
-					await deleteFile(this.settings.accessToken, driveFile.id);
-				}
-
-				completed++;
-				progress.setProgress(completed, `Deleting: ${path}`);
-			});
-
 			// Update meta files only if there were changes
-			const hasChanges = toUpload.length > 0 || toDelete.length > 0;
-
-			if (hasChanges) {
+			if (toUpload.length > 0) {
 				const now = new Date().toISOString();
 				localMeta.lastSyncTimestamp = now;
 				localMeta.lastUpdatedAt = now;
@@ -485,7 +461,7 @@ export class SyncEngine {
 				);
 			}
 
-			progress.complete(`Pushed ${toUpload.length} files, deleted ${toDelete.length} files.`);
+			progress.complete(`Pushed ${toUpload.length} files.`);
 
 			setTimeout(() => {
 				progress.close();
@@ -804,7 +780,8 @@ export class SyncEngine {
 				const meta = await buildMetaFromVault(this.vault, this.settings.excludePatterns);
 				const files = this.vault.getFiles().filter(
 					f => !shouldExclude(f.path, this.settings.excludePatterns) &&
-						f.path !== META_FILE_NAME_LOCAL
+						f.path !== META_FILE_NAME_LOCAL &&
+						f.path !== META_FILE_NAME_REMOTE
 				);
 
 				progress.setTotal(files.length);
@@ -1073,5 +1050,53 @@ export class SyncEngine {
 			console.error(`Failed to download file as text: ${fileId}`, err);
 		}
 		return undefined;
+	}
+
+	/**
+	 * Get orphan files (files on Google Drive not tracked in meta)
+	 */
+	async getOrphanFiles(): Promise<DriveFileInfo[]> {
+		this.refreshSettings();
+		const filesList = await this.refreshFilesList();
+		const remoteMeta = await readRemoteMeta(
+			this.settings.accessToken,
+			this.settings.vaultId,
+			filesList
+		);
+
+		const orphanFiles: DriveFileInfo[] = [];
+
+		for (const driveFile of filesList) {
+			// Skip meta file
+			if (driveFile.name === META_FILE_NAME_REMOTE) {
+				continue;
+			}
+
+			// Check if file is tracked in remoteMeta
+			if (!remoteMeta?.files[driveFile.name]) {
+				orphanFiles.push(driveFile);
+			}
+		}
+
+		return orphanFiles;
+	}
+
+	/**
+	 * Delete orphan files from Google Drive
+	 */
+	async deleteOrphanFiles(fileIds: string[]): Promise<number> {
+		this.refreshSettings();
+		let deleted = 0;
+
+		for (const fileId of fileIds) {
+			try {
+				await deleteFile(this.settings.accessToken, fileId);
+				deleted++;
+			} catch (err) {
+				console.error(`Failed to delete orphan file: ${fileId}`, err);
+			}
+		}
+
+		return deleted;
 	}
 }

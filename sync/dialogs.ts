@@ -677,6 +677,152 @@ export class SyncCompleteDialog extends Modal {
 }
 
 /**
+ * Orphan file info for display
+ */
+export interface OrphanFileInfo {
+	id: string;
+	name: string;
+}
+
+/**
+ * Dialog for selecting and deleting orphan files
+ */
+export class OrphanFilesDialog extends Modal {
+	private files: OrphanFileInfo[];
+	private onDelete: (fileIds: string[]) => Promise<void>;
+	private selectedFiles: Set<string> = new Set();
+	private checkboxes: Map<string, HTMLInputElement> = new Map();
+	private selectAllCheckbox: HTMLInputElement | null = null;
+	private deleteButton: HTMLButtonElement | null = null;
+
+	constructor(
+		app: App,
+		files: OrphanFileInfo[],
+		onDelete: (fileIds: string[]) => Promise<void>
+	) {
+		super(app);
+		this.files = files;
+		this.onDelete = onDelete;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+
+		contentEl.createEl('h2', { text: t('orphanFilesTitle') });
+		contentEl.createEl('p', {
+			text: t('orphanFilesDesc'),
+			cls: 'orphan-dialog-description',
+		});
+
+		if (this.files.length === 0) {
+			contentEl.createEl('p', {
+				text: t('noOrphanFiles'),
+				cls: 'orphan-no-files',
+			});
+			new Setting(contentEl)
+				.addButton(btn =>
+					btn
+						.setButtonText(t('ok'))
+						.setCta()
+						.onClick(() => this.close())
+				);
+			return;
+		}
+
+		// Select all checkbox
+		const selectAllContainer = contentEl.createDiv({ cls: 'orphan-select-all' });
+		const selectAllLabel = selectAllContainer.createEl('label', { cls: 'orphan-checkbox-label' });
+		this.selectAllCheckbox = selectAllLabel.createEl('input', { type: 'checkbox' });
+		selectAllLabel.createSpan({ text: t('selectAll') });
+
+		this.selectAllCheckbox.addEventListener('change', () => {
+			const checked = this.selectAllCheckbox!.checked;
+			for (const [fileId, checkbox] of this.checkboxes) {
+				checkbox.checked = checked;
+				if (checked) {
+					this.selectedFiles.add(fileId);
+				} else {
+					this.selectedFiles.delete(fileId);
+				}
+			}
+			this.updateDeleteButton();
+		});
+
+		// File list with checkboxes
+		const fileListContainer = contentEl.createDiv({ cls: 'orphan-file-list' });
+
+		for (const file of this.files) {
+			const fileEl = fileListContainer.createDiv({ cls: 'orphan-file-item' });
+			const label = fileEl.createEl('label', { cls: 'orphan-checkbox-label' });
+			const checkbox = label.createEl('input', { type: 'checkbox' });
+			label.createSpan({ text: file.name, cls: 'orphan-file-name' });
+
+			this.checkboxes.set(file.id, checkbox);
+
+			checkbox.addEventListener('change', () => {
+				if (checkbox.checked) {
+					this.selectedFiles.add(file.id);
+				} else {
+					this.selectedFiles.delete(file.id);
+				}
+				this.updateSelectAllCheckbox();
+				this.updateDeleteButton();
+			});
+		}
+
+		// Buttons
+		const buttonContainer = new Setting(contentEl);
+		buttonContainer.addButton(btn => {
+			this.deleteButton = btn.buttonEl;
+			btn
+				.setButtonText(t('deleteSelected', { count: '0' }))
+				.setWarning()
+				.setDisabled(true)
+				.onClick(async () => {
+					if (this.selectedFiles.size === 0) return;
+
+					const fileIds = Array.from(this.selectedFiles);
+					btn.setDisabled(true);
+					btn.setButtonText(t('deleting'));
+
+					try {
+						await this.onDelete(fileIds);
+						this.close();
+					} catch (err) {
+						console.error('Failed to delete orphan files:', err);
+						btn.setButtonText(t('deleteSelected', { count: fileIds.length.toString() }));
+						btn.setDisabled(false);
+					}
+				});
+		});
+		buttonContainer.addButton(btn =>
+			btn
+				.setButtonText(t('cancel'))
+				.onClick(() => this.close())
+		);
+	}
+
+	private updateSelectAllCheckbox() {
+		if (!this.selectAllCheckbox) return;
+		this.selectAllCheckbox.checked = this.selectedFiles.size === this.files.length;
+		this.selectAllCheckbox.indeterminate =
+			this.selectedFiles.size > 0 && this.selectedFiles.size < this.files.length;
+	}
+
+	private updateDeleteButton() {
+		if (!this.deleteButton) return;
+		const count = this.selectedFiles.size;
+		this.deleteButton.textContent = t('deleteSelected', { count: count.toString() });
+		this.deleteButton.disabled = count === 0;
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+/**
  * CSS styles for dialogs (to be added to styles.css)
  */
 export const dialogStyles = `
@@ -984,5 +1130,55 @@ export const dialogStyles = `
 .sync-complete-skipped {
 	color: var(--text-muted);
 	font-size: 0.9em;
+}
+
+.orphan-dialog-description {
+	color: var(--text-muted);
+	margin-bottom: 1em;
+}
+
+.orphan-no-files {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.orphan-select-all {
+	margin-bottom: 0.5em;
+	padding-bottom: 0.5em;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.orphan-file-list {
+	max-height: 300px;
+	overflow-y: auto;
+	margin-bottom: 1em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+}
+
+.orphan-file-item {
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.orphan-file-item:last-child {
+	border-bottom: none;
+}
+
+.orphan-file-item:hover {
+	background: var(--background-secondary);
+}
+
+.orphan-checkbox-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+}
+
+.orphan-file-name {
+	font-family: var(--font-monospace);
+	font-size: 0.85em;
+	word-break: break-all;
 }
 `;
