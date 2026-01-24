@@ -75,25 +75,72 @@ describe('Push Changes Scenarios', () => {
 			expect(hasConflict).toBe(false);
 		});
 
-		it('should detect conflict when hashes differ', async () => {
+		it('should NOT show conflict when remote is newer (remote is authoritative)', async () => {
 			const localContent = 'Local content';
 			const remoteContent = 'Remote content';
 			const localHash = await calculateHash(new TextEncoder().encode(localContent).buffer as ArrayBuffer);
 			const remoteHash = await calculateHash(new TextEncoder().encode(remoteContent).buffer as ArrayBuffer);
 
+			// Local file is older
+			const localModifiedTime = '2024-01-01T00:00:00.000Z';
+			// Remote file is newer
+			const remoteModifiedTime = '2024-01-15T00:00:00.000Z';
+
 			vault.addFile('note.md', localContent);
 
 			const remoteMeta: SyncMeta = {
-				lastUpdatedAt: '2024-01-01T00:00:00.000Z',
-				lastSyncTimestamp: new Date().toISOString(),
+				lastUpdatedAt: '2024-01-15T00:00:00.000Z',
+				lastSyncTimestamp: '2024-01-15T00:00:00.000Z',
 				files: {
-					'note.md': { hash: remoteHash, modifiedTime: new Date().toISOString() }
+					'note.md': { hash: remoteHash, modifiedTime: remoteModifiedTime }
 				}
 			};
 
-			// Conflict - hashes differ
-			const hasConflict = localHash !== remoteMeta.files['note.md'].hash;
-			expect(hasConflict).toBe(true);
+			// Hashes differ
+			const hashesDiffer = localHash !== remoteMeta.files['note.md'].hash;
+			expect(hashesDiffer).toBe(true);
+
+			// But local is older than remote - NO conflict (remote is authoritative)
+			const localIsNewer = new Date(localModifiedTime) > new Date(remoteModifiedTime);
+			expect(localIsNewer).toBe(false);
+
+			// Conflict should only be shown if local is newer
+			const shouldShowConflict = hashesDiffer && localIsNewer;
+			expect(shouldShowConflict).toBe(false);
+		});
+
+		it('should show conflict when local is newer than remote', async () => {
+			const localContent = 'Local content';
+			const remoteContent = 'Remote content';
+			const localHash = await calculateHash(new TextEncoder().encode(localContent).buffer as ArrayBuffer);
+			const remoteHash = await calculateHash(new TextEncoder().encode(remoteContent).buffer as ArrayBuffer);
+
+			// Local file is newer
+			const localModifiedTime = '2024-01-20T00:00:00.000Z';
+			// Remote file is older
+			const remoteModifiedTime = '2024-01-15T00:00:00.000Z';
+
+			vault.addFile('note.md', localContent);
+
+			const remoteMeta: SyncMeta = {
+				lastUpdatedAt: '2024-01-15T00:00:00.000Z',
+				lastSyncTimestamp: '2024-01-15T00:00:00.000Z',
+				files: {
+					'note.md': { hash: remoteHash, modifiedTime: remoteModifiedTime }
+				}
+			};
+
+			// Hashes differ
+			const hashesDiffer = localHash !== remoteMeta.files['note.md'].hash;
+			expect(hashesDiffer).toBe(true);
+
+			// Local is newer than remote - should show conflict
+			const localIsNewer = new Date(localModifiedTime) > new Date(remoteModifiedTime);
+			expect(localIsNewer).toBe(true);
+
+			// Conflict should be shown
+			const shouldShowConflict = hashesDiffer && localIsNewer;
+			expect(shouldShowConflict).toBe(true);
 		});
 	});
 

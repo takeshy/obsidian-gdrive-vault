@@ -242,33 +242,36 @@ export class SyncEngine {
 				return;
 			}
 
-			// Case: No local meta - need to compare by hash and show conflicts
+			// Case: No local meta - remote is authoritative, but check if local is newer
 			if (!localMeta) {
 				const currentLocalMeta = await buildMetaFromVault(this.vault, this.settings.excludePatterns);
 
-				// Find conflicts by comparing hashes
+				// Find conflicts only when local file is newer than remote
 				const conflicts: ConflictInfoWithContent[] = [];
 				for (const [path, localInfo] of Object.entries(currentLocalMeta.files)) {
 					const remoteInfo = remoteMeta.files[path];
 					if (remoteInfo && localInfo.hash !== remoteInfo.hash) {
-						const conflict: ConflictInfoWithContent = {
-							path,
-							localModifiedTime: localInfo.modifiedTime,
-							remoteModifiedTime: remoteInfo.modifiedTime,
-							localHash: localInfo.hash,
-							remoteHash: remoteInfo.hash,
-						};
+						// Only conflict if local is newer than remote
+						if (new Date(localInfo.modifiedTime) > new Date(remoteInfo.modifiedTime)) {
+							const conflict: ConflictInfoWithContent = {
+								path,
+								localModifiedTime: localInfo.modifiedTime,
+								remoteModifiedTime: remoteInfo.modifiedTime,
+								localHash: localInfo.hash,
+								remoteHash: remoteInfo.hash,
+							};
 
-						// Load content for markdown files (for diff display)
-						if (path.endsWith('.md')) {
-							conflict.localContent = await this.readFileAsText(path);
-							const driveFile = filesList.find(f => f.name === path);
-							if (driveFile) {
-								conflict.remoteContent = await this.downloadFileAsText(driveFile.id);
+							// Load content for markdown files (for diff display)
+							if (path.endsWith('.md')) {
+								conflict.localContent = await this.readFileAsText(path);
+								const driveFile = filesList.find(f => f.name === path);
+								if (driveFile) {
+									conflict.remoteContent = await this.downloadFileAsText(driveFile.id);
+								}
 							}
-						}
 
-						conflicts.push(conflict);
+							conflicts.push(conflict);
+						}
 					}
 				}
 
@@ -511,33 +514,36 @@ export class SyncEngine {
 				return;
 			}
 
-			// Case: No local meta - download with conflict check
+			// Case: No local meta - remote is authoritative, but check if local is newer
 			if (!localMeta) {
 				const currentLocalMeta = await buildMetaFromVault(this.vault, this.settings.excludePatterns);
 
-				// Find conflicts
+				// Find conflicts only when local file is newer than remote
 				const conflicts: ConflictInfoWithContent[] = [];
 				for (const [path, remoteInfo] of Object.entries(remoteMeta.files)) {
 					const localInfo = currentLocalMeta.files[path];
 					if (localInfo && localInfo.hash !== remoteInfo.hash) {
-						const conflict: ConflictInfoWithContent = {
-							path,
-							localModifiedTime: localInfo.modifiedTime,
-							remoteModifiedTime: remoteInfo.modifiedTime,
-							localHash: localInfo.hash,
-							remoteHash: remoteInfo.hash,
-						};
+						// Only conflict if local is newer than remote
+						if (new Date(localInfo.modifiedTime) > new Date(remoteInfo.modifiedTime)) {
+							const conflict: ConflictInfoWithContent = {
+								path,
+								localModifiedTime: localInfo.modifiedTime,
+								remoteModifiedTime: remoteInfo.modifiedTime,
+								localHash: localInfo.hash,
+								remoteHash: remoteInfo.hash,
+							};
 
-						// Load content for markdown files (for diff display)
-						if (path.endsWith('.md')) {
-							conflict.localContent = await this.readFileAsText(path);
-							const driveFile = filesList.find(f => f.name === path);
-							if (driveFile) {
-								conflict.remoteContent = await this.downloadFileAsText(driveFile.id);
+							// Load content for markdown files (for diff display)
+							if (path.endsWith('.md')) {
+								conflict.localContent = await this.readFileAsText(path);
+								const driveFile = filesList.find(f => f.name === path);
+								if (driveFile) {
+									conflict.remoteContent = await this.downloadFileAsText(driveFile.id);
+								}
 							}
-						}
 
-						conflicts.push(conflict);
+							conflicts.push(conflict);
+						}
 					}
 				}
 

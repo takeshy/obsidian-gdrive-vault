@@ -25,28 +25,6 @@ describe('Pull Changes Scenarios', () => {
 	});
 
 	describe('Case 2: No local meta (first pull on this device)', () => {
-		it('should compare hashes to detect conflicts', async () => {
-			const localContent = 'Local version';
-			const remoteContent = 'Remote version';
-
-			vault.addFile('note.md', localContent);
-
-			const localHash = await calculateHash(new TextEncoder().encode(localContent).buffer as ArrayBuffer);
-			const remoteHash = await calculateHash(new TextEncoder().encode(remoteContent).buffer as ArrayBuffer);
-
-			const remoteMeta: SyncMeta = {
-				lastUpdatedAt: '2024-01-01T00:00:00.000Z',
-				lastSyncTimestamp: new Date().toISOString(),
-				files: {
-					'note.md': { hash: remoteHash, modifiedTime: new Date().toISOString() }
-				}
-			};
-
-			// Local meta is null, so compare current local hash with remote
-			const hasConflict = localHash !== remoteMeta.files['note.md'].hash;
-			expect(hasConflict).toBe(true);
-		});
-
 		it('should not conflict when content matches', async () => {
 			const content = 'Same content';
 			vault.addFile('note.md', content);
@@ -64,6 +42,74 @@ describe('Pull Changes Scenarios', () => {
 			const localHash = await calculateHash(new TextEncoder().encode(content).buffer as ArrayBuffer);
 			const hasConflict = localHash !== remoteMeta.files['note.md'].hash;
 			expect(hasConflict).toBe(false);
+		});
+
+		it('should NOT show conflict when remote is newer (remote is authoritative)', async () => {
+			const localContent = 'Local version';
+			const remoteContent = 'Remote version';
+			const localHash = await calculateHash(new TextEncoder().encode(localContent).buffer as ArrayBuffer);
+			const remoteHash = await calculateHash(new TextEncoder().encode(remoteContent).buffer as ArrayBuffer);
+
+			// Local file is older
+			const localModifiedTime = '2024-01-01T00:00:00.000Z';
+			// Remote file is newer
+			const remoteModifiedTime = '2024-01-15T00:00:00.000Z';
+
+			vault.addFile('note.md', localContent);
+
+			const remoteMeta: SyncMeta = {
+				lastUpdatedAt: '2024-01-15T00:00:00.000Z',
+				lastSyncTimestamp: '2024-01-15T00:00:00.000Z',
+				files: {
+					'note.md': { hash: remoteHash, modifiedTime: remoteModifiedTime }
+				}
+			};
+
+			// Hashes differ
+			const hashesDiffer = localHash !== remoteMeta.files['note.md'].hash;
+			expect(hashesDiffer).toBe(true);
+
+			// But local is older than remote - NO conflict (remote is authoritative)
+			const localIsNewer = new Date(localModifiedTime) > new Date(remoteModifiedTime);
+			expect(localIsNewer).toBe(false);
+
+			// Conflict should only be shown if local is newer
+			const shouldShowConflict = hashesDiffer && localIsNewer;
+			expect(shouldShowConflict).toBe(false);
+		});
+
+		it('should show conflict when local is newer than remote', async () => {
+			const localContent = 'Local version';
+			const remoteContent = 'Remote version';
+			const localHash = await calculateHash(new TextEncoder().encode(localContent).buffer as ArrayBuffer);
+			const remoteHash = await calculateHash(new TextEncoder().encode(remoteContent).buffer as ArrayBuffer);
+
+			// Local file is newer
+			const localModifiedTime = '2024-01-20T00:00:00.000Z';
+			// Remote file is older
+			const remoteModifiedTime = '2024-01-15T00:00:00.000Z';
+
+			vault.addFile('note.md', localContent);
+
+			const remoteMeta: SyncMeta = {
+				lastUpdatedAt: '2024-01-15T00:00:00.000Z',
+				lastSyncTimestamp: '2024-01-15T00:00:00.000Z',
+				files: {
+					'note.md': { hash: remoteHash, modifiedTime: remoteModifiedTime }
+				}
+			};
+
+			// Hashes differ
+			const hashesDiffer = localHash !== remoteMeta.files['note.md'].hash;
+			expect(hashesDiffer).toBe(true);
+
+			// Local is newer than remote - should show conflict
+			const localIsNewer = new Date(localModifiedTime) > new Date(remoteModifiedTime);
+			expect(localIsNewer).toBe(true);
+
+			// Conflict should be shown
+			const shouldShowConflict = hashesDiffer && localIsNewer;
+			expect(shouldShowConflict).toBe(true);
 		});
 
 		it('should download new remote files', async () => {
