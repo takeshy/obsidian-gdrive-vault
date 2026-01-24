@@ -41,6 +41,28 @@ const translations = {
 		deleteConfirmDescription: 'The following files were deleted on remote but have been modified locally after the last sync.',
 		deleteConfirmNotice: 'These files will be saved to {folder}/ before deletion.',
 		modifiedAt: 'Modified: {time}',
+
+		// Remote Excluded Files
+		remoteExcludedFilesTitle: 'Remote Excluded Files',
+		remoteExcludedFilesDesc: 'Files/folders on remote that match your current exclude patterns. These are kept for other devices with different exclude settings.',
+		loading: 'Loading...',
+		noExcludedFiles: 'No excluded files found on remote.',
+		deleteFromRemote: 'Delete',
+		filesMatching: '{count} file(s) matching "{pattern}"',
+		individualFile: 'Individual file',
+		dotFilesAndFolders: '(dot files/folders)',
+		deleteExcludedTitle: 'Delete "{name}"',
+		deleteFileTitle: 'Delete File',
+		deleting: 'Deleting...',
+		deletedFiles: 'Deleted {count} file(s)',
+		deletedFile: 'Deleted "{name}"',
+		deleteFailed: 'Failed to delete. Check console for details.',
+		loadFailed: 'Failed to load. Check console for details.',
+
+		// Delete Excluded Files Dialog
+		deleteExcludedDesc: 'The following {count} file(s) will be deleted from Google Drive:',
+		localFilesUnaffected: 'Local files will not be affected.',
+		cannotBeUndone: 'This action cannot be undone.',
 	},
 	ja: {
 		// Conflict Dialog
@@ -78,6 +100,28 @@ const translations = {
 		deleteConfirmDescription: '以下のファイルはリモートで削除されましたが、最後の同期以降にローカルで変更されています。',
 		deleteConfirmNotice: 'これらのファイルは削除前に{folder}/に保存されます。',
 		modifiedAt: '更新: {time}',
+
+		// Remote Excluded Files
+		remoteExcludedFilesTitle: 'リモートの除外ファイル',
+		remoteExcludedFilesDesc: '現在の除外パターンに一致するリモートのファイル/フォルダ。異なる除外設定の他デバイス用に保持されています。',
+		loading: '読み込み中...',
+		noExcludedFiles: 'リモートに除外ファイルはありません。',
+		deleteFromRemote: '削除',
+		filesMatching: '"{pattern}"に一致する{count}個のファイル',
+		individualFile: '個別ファイル',
+		dotFilesAndFolders: '(ドットファイル/フォルダ)',
+		deleteExcludedTitle: '"{name}"を削除',
+		deleteFileTitle: 'ファイルを削除',
+		deleting: '削除中...',
+		deletedFiles: '{count}個のファイルを削除しました',
+		deletedFile: '"{name}"を削除しました',
+		deleteFailed: '削除に失敗しました。詳細はコンソールを確認してください。',
+		loadFailed: '読み込みに失敗しました。詳細はコンソールを確認してください。',
+
+		// Delete Excluded Files Dialog
+		deleteExcludedDesc: '以下の{count}個のファイルがGoogle Driveから削除されます:',
+		localFilesUnaffected: 'ローカルファイルは影響を受けません。',
+		cannotBeUndone: 'この操作は元に戻せません。',
 	},
 };
 

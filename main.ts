@@ -11,15 +11,17 @@ import {
 
 import axios from "axios";
 import {
+	deleteFile,
 	getFoldersList,
+	getFilesList,
 	getVaultId,
 	uploadFolder,
 } from "./actions";
-import { DriveSettings, DEFAULT_CONFLICT_FOLDER } from "./sync/types";
+import { DriveSettings, DEFAULT_CONFLICT_FOLDER, META_FILE_NAME_REMOTE } from "./sync/types";
 import { SyncEngine } from "./sync/sync-engine";
-import { dialogStyles, ConfirmDialog } from "./sync/dialogs";
+import { dialogStyles, ConfirmDialog, DeleteExcludedFilesDialog } from "./sync/dialogs";
 import { t } from "./sync/i18n";
-import { readLocalMeta } from "./sync/meta";
+import { readLocalMeta, shouldExclude, readRemoteMeta, writeRemoteMeta } from "./sync/meta";
 import { OAUTH_CONFIG } from "./config";
 
 const ERROR_LOG_FILE_NAME = "error-log-gdrive-plugin.md";
@@ -701,6 +703,21 @@ class SyncSettingsTab extends PluginSettingTab {
 				});
 			});
 
+		// Remote excluded files management section
+		containerEl.createEl("h3", { text: t("remoteExcludedFilesTitle") });
+
+		const excludedFilesContainer = containerEl.createDiv({ cls: "excluded-files-container" });
+		excludedFilesContainer.createEl("p", {
+			text: t("remoteExcludedFilesDesc"),
+			cls: "setting-item-description"
+		});
+
+		const excludedFilesList = excludedFilesContainer.createDiv({ cls: "excluded-files-list" });
+		const loadingEl = excludedFilesList.createEl("p", { text: t("loading") });
+
+		// Load excluded files asynchronously
+		this.loadExcludedFiles(excludedFilesList, loadingEl);
+
 		containerEl.createEl("h3", { text: "Full Sync Operations" });
 
 		new Setting(containerEl)
@@ -728,5 +745,206 @@ class SyncSettingsTab extends PluginSettingTab {
 					}
 				});
 			});
+	}
+
+	/**
+	 * Load and display remote files that match exclude patterns
+	 */
+	private async loadExcludedFiles(container: HTMLElement, loadingEl: HTMLElement): Promise<void> {
+		try {
+			const filesList = await getFilesList(
+				this.plugin.settings.accessToken,
+				this.plugin.settings.vaultId
+			);
+
+			// Filter files that match exclude patterns (excluding meta file)
+			const excludedFiles = filesList.filter(f =>
+				f.name !== META_FILE_NAME_REMOTE &&
+				shouldExclude(f.name, this.plugin.settings.excludePatterns)
+			);
+
+			loadingEl.remove();
+
+			if (excludedFiles.length === 0) {
+				container.createEl("p", {
+					text: t("noExcludedFiles"),
+					cls: "setting-item-description"
+				});
+				return;
+			}
+
+			// Group files by directory patterns
+			const dirPatterns = this.plugin.settings.excludePatterns.filter(p => p.endsWith("**"));
+			const filePatterns = this.plugin.settings.excludePatterns.filter(p => !p.endsWith("**"));
+
+			// Extract directory prefixes from patterns (e.g., ".obsidian/**" -> ".obsidian/")
+			const dirPrefixes: Map<string, { pattern: string; files: typeof excludedFiles }> = new Map();
+
+			for (const pattern of dirPatterns) {
+				// Convert pattern to prefix: ".obsidian/**" -> ".obsidian/"
+				const prefix = pattern.replace(/\*\*$/, "").replace(/\/$/, "") + "/";
+				// Handle patterns like ".**" -> "." (dot files/folders at root)
+				const normalizedPrefix = prefix === "./" ? "." : prefix;
+				dirPrefixes.set(normalizedPrefix, { pattern, files: [] });
+			}
+
+			// Categorize excluded files
+			const individualFiles: typeof excludedFiles = [];
+
+			for (const file of excludedFiles) {
+				let matchedDir = false;
+
+				for (const [prefix, data] of dirPrefixes) {
+					if (prefix === "." && file.name.startsWith(".")) {
+						// Special case for dot files/folders
+						data.files.push(file);
+						matchedDir = true;
+						break;
+					} else if (file.name.startsWith(prefix) || file.name === prefix.slice(0, -1)) {
+						data.files.push(file);
+						matchedDir = true;
+						break;
+					}
+				}
+
+				if (!matchedDir) {
+					// Check if it matches a file pattern
+					for (const pattern of filePatterns) {
+						if (shouldExclude(file.name, [pattern])) {
+							individualFiles.push(file);
+							break;
+						}
+					}
+				}
+			}
+
+			// Display directories
+			for (const [prefix, data] of dirPrefixes) {
+				if (data.files.length === 0) continue;
+
+				const dirName = prefix === "." ? t("dotFilesAndFolders") : prefix.slice(0, -1);
+				const setting = new Setting(container)
+					.setName(dirName)
+					.setDesc(t("filesMatching", { count: data.files.length.toString(), pattern: data.pattern }));
+
+				setting.addButton((button) => {
+					button.setButtonText(t("deleteFromRemote"));
+					button.setWarning();
+					button.onClick(() => {
+						const fileNames = data.files.map(f => f.name);
+						new DeleteExcludedFilesDialog(
+							this.app,
+							t("deleteExcludedTitle", { name: dirName }),
+							fileNames,
+							async () => {
+								button.setDisabled(true);
+								button.setButtonText(t("deleting"));
+
+								try {
+									for (const file of data.files) {
+										await deleteFile(this.plugin.settings.accessToken, file.id);
+									}
+
+									// Update remote meta to remove deleted files
+									const newFilesList = await getFilesList(
+										this.plugin.settings.accessToken,
+										this.plugin.settings.vaultId
+									);
+									const remoteMeta = await readRemoteMeta(
+										this.plugin.settings.accessToken,
+										this.plugin.settings.vaultId,
+										newFilesList
+									);
+									if (remoteMeta) {
+										for (const file of data.files) {
+											delete remoteMeta.files[file.name];
+										}
+										await writeRemoteMeta(
+											this.plugin.settings.accessToken,
+											this.plugin.settings.vaultId,
+											remoteMeta,
+											newFilesList
+										);
+									}
+
+									new Notice(t("deletedFiles", { count: data.files.length.toString() }));
+									setting.settingEl.remove();
+								} catch (err) {
+									console.error("Failed to delete files:", err);
+									new Notice(t("deleteFailed"));
+									button.setDisabled(false);
+									button.setButtonText(t("deleteFromRemote"));
+								}
+							},
+							() => {
+								// Cancel - do nothing
+							}
+						).open();
+					});
+				});
+			}
+
+			// Display individual files
+			for (const file of individualFiles) {
+				const setting = new Setting(container)
+					.setName(file.name)
+					.setDesc(t("individualFile"));
+
+				setting.addButton((button) => {
+					button.setButtonText(t("deleteFromRemote"));
+					button.setWarning();
+					button.onClick(() => {
+						new DeleteExcludedFilesDialog(
+							this.app,
+							t("deleteFileTitle"),
+							[file.name],
+							async () => {
+								button.setDisabled(true);
+								button.setButtonText(t("deleting"));
+
+								try {
+									await deleteFile(this.plugin.settings.accessToken, file.id);
+
+									// Update remote meta
+									const newFilesList = await getFilesList(
+										this.plugin.settings.accessToken,
+										this.plugin.settings.vaultId
+									);
+									const remoteMeta = await readRemoteMeta(
+										this.plugin.settings.accessToken,
+										this.plugin.settings.vaultId,
+										newFilesList
+									);
+									if (remoteMeta) {
+										delete remoteMeta.files[file.name];
+										await writeRemoteMeta(
+											this.plugin.settings.accessToken,
+											this.plugin.settings.vaultId,
+											remoteMeta,
+											newFilesList
+										);
+									}
+
+									new Notice(t("deletedFile", { name: file.name }));
+									setting.settingEl.remove();
+								} catch (err) {
+									console.error("Failed to delete file:", err);
+									new Notice(t("deleteFailed"));
+									button.setDisabled(false);
+									button.setButtonText(t("deleteFromRemote"));
+								}
+							},
+							() => {
+								// Cancel - do nothing
+							}
+						).open();
+					});
+				});
+			}
+
+		} catch (err) {
+			console.error("Failed to load excluded files:", err);
+			loadingEl.textContent = t("loadFailed");
+		}
 	}
 }

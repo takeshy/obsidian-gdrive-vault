@@ -524,6 +524,83 @@ export class SyncProgressDialog extends Modal {
 }
 
 /**
+ * Dialog for confirming deletion of excluded files
+ */
+export class DeleteExcludedFilesDialog extends Modal {
+	private title: string;
+	private files: string[];
+	private onConfirm: () => void;
+	private onCancel: () => void;
+
+	constructor(
+		app: App,
+		title: string,
+		files: string[],
+		onConfirm: () => void,
+		onCancel: () => void
+	) {
+		super(app);
+		this.title = title;
+		this.files = files;
+		this.onConfirm = onConfirm;
+		this.onCancel = onCancel;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+
+		contentEl.createEl('h2', { text: this.title });
+		contentEl.createEl('p', {
+			text: t('deleteExcludedDesc', { count: this.files.length.toString() }),
+			cls: 'delete-dialog-description',
+		});
+		contentEl.createEl('p', {
+			text: t('localFilesUnaffected'),
+			cls: 'delete-dialog-local-note',
+		});
+
+		// Scrollable file list
+		const fileListContainer = contentEl.createDiv({ cls: 'delete-file-list' });
+		for (const file of this.files) {
+			fileListContainer.createEl('div', {
+				text: file,
+				cls: 'delete-file-item',
+			});
+		}
+
+		contentEl.createEl('p', {
+			text: t('cannotBeUndone'),
+			cls: 'delete-dialog-warning',
+		});
+
+		new Setting(contentEl)
+			.addButton(btn =>
+				btn
+					.setButtonText(t('deleteFromRemote'))
+					.setCta()
+					.setWarning()
+					.onClick(() => {
+						this.close();
+						this.onConfirm();
+					})
+			)
+			.addButton(btn =>
+				btn
+					.setButtonText(t('cancel'))
+					.onClick(() => {
+						this.close();
+						this.onCancel();
+					})
+			);
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+/**
  * CSS styles for dialogs (to be added to styles.css)
  */
 export const dialogStyles = `
@@ -745,5 +822,45 @@ export const dialogStyles = `
 	font-size: 0.85em;
 	color: var(--text-muted);
 	margin-top: 2px;
+}
+
+/* Delete excluded files dialog */
+.delete-dialog-description {
+	color: var(--text-muted);
+	margin-bottom: 0.25em;
+}
+
+.delete-dialog-local-note {
+	color: var(--text-success);
+	font-size: 0.9em;
+	margin-bottom: 0.5em;
+}
+
+.delete-file-list {
+	max-height: 200px;
+	overflow-y: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 8px;
+	margin-bottom: 1em;
+	background-color: var(--background-secondary);
+}
+
+.delete-file-item {
+	font-family: var(--font-monospace);
+	font-size: 0.85em;
+	padding: 4px 0;
+	word-break: break-all;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.delete-file-item:last-child {
+	border-bottom: none;
+}
+
+.delete-dialog-warning {
+	color: var(--text-error);
+	font-weight: 600;
+	margin-top: 0.5em;
 }
 `;

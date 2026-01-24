@@ -89,6 +89,7 @@ For additional devices:
 | Exclude patterns | Glob patterns for files to exclude from sync |
 | Conflict folder | Directory name for saving unselected conflict versions (default: `sync_conflicts`) |
 | Clear conflict files | Delete all files in the conflict folder |
+| Remote Excluded Files | View and delete files on remote that match current exclude patterns |
 | Full Push | Upload entire vault |
 | Full Pull | Download entire vault |
 
@@ -185,6 +186,17 @@ Add glob patterns in settings:
 - `*.tmp` - Exclude .tmp files
 - `drafts/**` - Exclude drafts folder
 - `**/private/**` - Exclude any "private" folder
+
+### What happens to excluded files already on remote?
+
+Excluded files remain on Google Drive intentionally. This allows different devices to use different exclude patterns. For example:
+- Desktop A: syncs everything
+- Desktop B: excludes `large-assets/**`
+- Mobile: excludes `large-assets/**` and `archives/**`
+
+Each device only downloads/uploads files matching its own exclude patterns, but files excluded on one device can still be synced between other devices.
+
+To clean up excluded files from remote, use **Manage Remote Excluded Files** in settings.
 
 ## Troubleshooting
 

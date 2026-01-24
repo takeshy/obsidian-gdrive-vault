@@ -89,6 +89,7 @@ Obsidian用の手動同期プラグイン。VaultをGoogle Driveに同期しま�
 | Exclude patterns | 同期から除外するglobパターン |
 | Conflict folder | 競合バックアップの保存先フォルダ名（デフォルト: `sync_conflicts`） |
 | Clear conflict files | 競合フォルダ内のファイルを一括削除 |
+| Remote Excluded Files | 現在の除外パターンに一致するリモートファイルの表示・削除 |
 | Full Push | Vault全体をアップロード |
 | Full Pull | Vault全体をダウンロード |
 
@@ -185,6 +186,17 @@ Obsidian用の手動同期プラグイン。VaultをGoogle Driveに同期しま�
 - `*.tmp` - .tmpファイルを除外
 - `drafts/**` - draftsフォルダを除外
 - `**/private/**` - 「private」フォルダを除外
+
+### 除外設定したファイルがリモートに残っている場合は？
+
+除外ファイルは意図的にGoogle Driveに残されます。これによりデバイスごとに異なる除外パターンを使用できます。例：
+- デスクトップA: すべてを同期
+- デスクトップB: `large-assets/**`を除外
+- モバイル: `large-assets/**`と`archives/**`を除外
+
+各デバイスは自身の除外パターンに一致するファイルのみダウンロード/アップロードしますが、あるデバイスで除外されたファイルも他のデバイス間では同期できます。
+
+リモートから除外ファイルを削除するには、設定の**Remote Excluded Files**を使用してください。
 
 ## トラブルシューティング
 
