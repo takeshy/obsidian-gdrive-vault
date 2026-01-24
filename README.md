@@ -166,6 +166,24 @@ When both local and remote have changes to the same file:
 
 The conflict folder is automatically excluded from sync. Delete backup files when no longer needed via settings or manually.
 
+### Sync Completion Dialog
+
+After sync completes, a dialog shows the list of files that were actually transferred:
+
+**Push Changes:**
+- Shows files that were **uploaded** to Google Drive
+- Files where "Keep Remote" was selected are NOT shown (only backed up locally)
+
+**Pull Changes:**
+- Shows files that were **downloaded** from Google Drive
+- Files where "Keep Local" was selected are NOT shown (only remote is backed up to conflict folder)
+
+**Full Push/Pull:**
+- Shows all files that were actually transferred
+- Displays count of skipped files (unchanged files with matching hash)
+
+The dialog requires clicking "OK" to close, ensuring you see the sync results.
+
 ## FAQ
 
 ### Does this work on mobile?

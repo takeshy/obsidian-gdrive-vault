@@ -395,6 +395,7 @@ export class SyncEngine {
 		try {
 			const toUpload: string[] = [];
 			const toDelete: string[] = [];
+			const updatedFiles: UpdatedFileInfo[] = [];
 
 			// Determine what to upload
 			for (const [path, localInfo] of Object.entries(localMeta.files)) {
@@ -443,6 +444,11 @@ export class SyncEngine {
 							this.settings.vaultId
 						);
 					}
+
+					updatedFiles.push({
+						path,
+						modifiedTime: new Date(file.stat.mtime).toISOString(),
+					});
 				}
 
 				completed++;
@@ -483,7 +489,12 @@ export class SyncEngine {
 
 			setTimeout(() => {
 				progress.close();
-				new Notice(t('pushComplete'));
+				new SyncCompleteDialog(
+					this.app,
+					t('uploadComplete'),
+					`${t('updatedFiles')}: ${updatedFiles.length}`,
+					updatedFiles
+				).open();
 			}, 1500);
 
 		} catch (err) {
@@ -630,6 +641,7 @@ export class SyncEngine {
 		try {
 			const toDownload: string[] = [];
 			const toDelete: string[] = [];
+			const updatedFiles: UpdatedFileInfo[] = [];
 
 			// Determine what to download
 			for (const [path, remoteInfo] of Object.entries(remoteMeta.files)) {
@@ -712,6 +724,13 @@ export class SyncEngine {
 				if (driveFile) {
 					const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
 					await this.createFileWithPath(path, buffer);
+
+					// Track downloaded file with remote modification time
+					const remoteInfo = remoteMeta.files[path];
+					updatedFiles.push({
+						path,
+						modifiedTime: remoteInfo?.modifiedTime || new Date().toISOString(),
+					});
 				}
 
 				completed++;
@@ -757,7 +776,12 @@ export class SyncEngine {
 
 			setTimeout(() => {
 				progress.close();
-				new Notice(t('pullComplete'));
+				new SyncCompleteDialog(
+					this.app,
+					t('downloadComplete'),
+					`${t('updatedFiles')}: ${updatedFiles.length}`,
+					updatedFiles
+				).open();
 			}, 1500);
 
 		} catch (err) {
