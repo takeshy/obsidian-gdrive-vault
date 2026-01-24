@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-gdrive-vault",
 	"name": "GDrive Vault",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "Manual sync to Google Drive",
 	"author": "takeshy",
