@@ -8,6 +8,8 @@ Obsidian用の手動同期プラグイン。VaultをGoogle Driveに同期しま�
 - **競合解決**: ローカルかリモートを選択、マークダウンファイルはSide-by-side diffで差分表示
 - **競合バックアップ**: 選択しなかった方を`sync_conflicts/`フォルダに保存、手動マージ用
 - **バージョン管理**: 実際に変更がある時のみ同期
+- **スマート同期**: フルPush/Pullはハッシュ比較で未変更ファイルをスキップ
+- **完了サマリー**: 更新されたファイル一覧と更新時刻を表示
 - **並列処理**: 5並列でアップロード/ダウンロード
 - **クロスプラットフォーム**: デスクトップ、Android、iOSで動作
 - **多言語対応**: 英語・日本語UI
@@ -79,8 +81,10 @@ Obsidian用の手動同期プラグイン。VaultをGoogle Driveに同期しま�
 |----------|------|
 | `Push changes to Google Drive` | 変更ファイルをアップロード |
 | `Pull changes from Google Drive` | 変更ファイルをダウンロード |
-| `Full push to Google Drive` | Vault全体をアップロード（リモートを上書き） |
-| `Full pull from Google Drive` | Vault全体をダウンロード（ローカルを上書き） |
+| `Full push to Google Drive` | Vault全体をアップロード（未変更ファイルはスキップ） |
+| `Full pull from Google Drive` | Vault全体をダウンロード（未変更ファイルはスキップ） |
+
+フル同期操作はファイルハッシュを比較し、既に同一のファイルはスキップします。完了時に実際に更新されたファイルの一覧がダイアログで表示されます。
 
 ### 設定
 
@@ -204,7 +208,6 @@ Obsidian用の手動同期プラグイン。VaultをGoogle Driveに同期しま�
 2. Refresh Tokenが正しいか確認
 3. インターネット接続を確認
 4. コンソールでエラーメッセージを確認（Ctrl+Shift+I）
-5. 設定でログを有効にして詳細ログを取得
 
 
 ## ライセンス
