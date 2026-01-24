@@ -8,6 +8,8 @@ A manual sync plugin for Obsidian that syncs your vault to Google Drive.
 - **Conflict Resolution**: Choose Local or Remote with side-by-side diff view for markdown files
 - **Conflict Backup**: Unselected version saved to `sync_conflicts/` folder for manual merging
 - **Version Tracking**: Only syncs when there are actual changes
+- **Smart Sync**: Full push/pull skips unchanged files by comparing hashes
+- **Completion Summary**: Shows list of updated files with modification times
 - **Parallel Processing**: Fast uploads/downloads with 5 concurrent operations
 - **Cross-Platform**: Works on desktop, Android, and iOS
 - **i18n Support**: English and Japanese UI
@@ -79,8 +81,10 @@ For additional devices:
 |---------|-------------|
 | `Push changes to Google Drive` | Upload changed files |
 | `Pull changes from Google Drive` | Download changed files |
-| `Full push to Google Drive` | Upload entire vault (overwrites remote) |
-| `Full pull from Google Drive` | Download entire vault (overwrites local) |
+| `Full push to Google Drive` | Upload entire vault (skips unchanged files) |
+| `Full pull from Google Drive` | Download entire vault (skips unchanged files) |
+
+Full sync operations compare file hashes and skip files that are already identical, showing a completion dialog with the list of actually updated files.
 
 ### Settings
 
@@ -204,7 +208,6 @@ To clean up excluded files from remote, use **Manage Remote Excluded Files** in 
 2. Verify refresh token is correct
 3. Check internet connection
 4. View console for error messages (Ctrl+Shift+I)
-5. Enable logging in settings for detailed logs
 
 ## Support
 
