@@ -1,10 +1,38 @@
-import { requestUrl } from "obsidian";
+/**
+ * Google Drive API wrapper functions
+ */
 
-const newError = (actionName, err) => {
-	return new Error(`ERROR: Unable to complete action: - ${actionName} => ${err.name} - ${err.message} - ${err.stack}`)
+import { requestUrl, RequestUrlResponse } from "obsidian";
+
+/** File info returned from Drive API */
+export interface DriveFileInfo {
+	id: string;
+	name: string;
+	modifiedTime: string;
+	mimeType?: string;
 }
 
-const getVaultId = async (accessToken, vault, root = null) => {
+/** Folder info returned from Drive API */
+export interface DriveFolderInfo {
+	id: string;
+	name: string;
+}
+
+/**
+ * Create a standardized error for API actions
+ */
+const newError = (actionName: string, err: Error): Error => {
+	return new Error(`ERROR: Unable to complete action: - ${actionName} => ${err.name} - ${err.message} - ${err.stack}`);
+};
+
+/**
+ * Get the vault folder ID from Google Drive
+ */
+export const getVaultId = async (
+	accessToken: string,
+	vault: string,
+	root: string | null = null
+): Promise<string> => {
 	try {
 		const response = await requestUrl({
 			url:
@@ -15,24 +43,26 @@ const getVaultId = async (accessToken, vault, root = null) => {
 				Authorization: `Bearer ${accessToken}`,
 				Accept: "application/json",
 			},
-		}).catch((e) => console.log(e));
+		}).catch((e) => console.log(e)) as RequestUrlResponse;
 		const list = response.json.files;
-		var vaultFolder = list.filter((file) => file.name == vault);
-		var vaultId = vaultFolder.length ? vaultFolder[0].id : "NOT FOUND";
+		const vaultFolder = list.filter((file: { name: string }) => file.name == vault);
+		const vaultId = vaultFolder.length ? vaultFolder[0].id : "NOT FOUND";
 		return vaultId;
 	} catch (err) {
 		console.log(err);
-		throw newError("getVaultId", err);
-
+		throw newError("getVaultId", err as Error);
 	}
 };
 
-const uploadFile = async (
-	accessToken,
-	fileName,
-	buffer = null,
-	parentId = null
-) => {
+/**
+ * Upload a file to Google Drive
+ */
+export const uploadFile = async (
+	accessToken: string,
+	fileName: string,
+	buffer: ArrayBuffer | null = null,
+	parentId: string | null = null
+): Promise<string> => {
 	try {
 		const response = await requestUrl({
 			url: "https://www.googleapis.com/drive/v3/files?uploadType=multipart",
@@ -43,14 +73,13 @@ const uploadFile = async (
 			},
 			contentType: "application/json",
 			body: JSON.stringify({
-				//mimeType: "text/pain",
 				name: fileName,
 				parents: parentId ? [parentId] : [],
 			}),
-		}).catch((e) => console.log(e));
-		var id = response.json.id;
+		}).catch((e) => console.log(e)) as RequestUrlResponse;
+		const id = response.json.id;
 		if (buffer) {
-			// upload the metadata
+			// upload the content
 			await requestUrl({
 				url: `https://www.googleapis.com/upload/drive/v3/files/${id}`,
 				method: "PATCH",
@@ -65,14 +94,20 @@ const uploadFile = async (
 		return id;
 	} catch (err) {
 		console.log(err);
-		throw newError("uploadFile", err);
-
+		throw newError("uploadFile", err as Error);
 	}
 };
 
-const modifyFile = async (accessToken, fileId, buffer) => {
+/**
+ * Modify an existing file's content
+ */
+export const modifyFile = async (
+	accessToken: string,
+	fileId: string,
+	buffer: ArrayBuffer
+): Promise<RequestUrlResponse> => {
 	try {
-		var res = await requestUrl({
+		const res = await requestUrl({
 			url: `https://www.googleapis.com/upload/drive/v3/files/${fileId}`,
 			method: "PATCH",
 			headers: {
@@ -81,15 +116,22 @@ const modifyFile = async (accessToken, fileId, buffer) => {
 			},
 			contentType: "application/json",
 			body: buffer,
-		}).catch((e) => console.log(e));
+		}).catch((e) => console.log(e)) as RequestUrlResponse;
 		return res;
 	} catch (err) {
 		console.log(err);
-		throw newError("modifyFile", err);
-
+		throw newError("modifyFile", err as Error);
 	}
 };
-const renameFile = async (accessToken, fileId, newName) => {
+
+/**
+ * Rename a file in Google Drive
+ */
+export const renameFile = async (
+	accessToken: string,
+	fileId: string,
+	newName: string
+): Promise<string> => {
 	try {
 		const response = await requestUrl({
 			url: `https://www.googleapis.com/drive/v3/files/${fileId}`,
@@ -102,17 +144,22 @@ const renameFile = async (accessToken, fileId, newName) => {
 			body: JSON.stringify({
 				name: newName,
 			}),
-		}).catch((e) => console.log(e));
-		var id = response.json.id;
+		}).catch((e) => console.log(e)) as RequestUrlResponse;
+		const id = response.json.id;
 		return id;
 	} catch (err) {
 		console.log(err);
-		throw newError("renameFile", err)
-
+		throw newError("renameFile", err as Error);
 	}
 };
 
-const deleteFile = async (accessToken, fileId) => {
+/**
+ * Delete a file from Google Drive
+ */
+export const deleteFile = async (
+	accessToken: string,
+	fileId: string
+): Promise<boolean> => {
 	try {
 		const response = await requestUrl({
 			url: `https://www.googleapis.com/drive/v3/files/${fileId}`,
@@ -122,22 +169,29 @@ const deleteFile = async (accessToken, fileId) => {
 				Accept: "application/json",
 			},
 			contentType: "application/json",
-		})
+		});
 		if (response.status == 404) {
 			return false;
 		} else {
 			return true;
 		}
-	} catch (err) {
+	} catch (err: any) {
 		if (err.status == 404) {
-			return false
+			return false;
 		}
 		console.log(err);
-		throw newError("deleteFile", err);
+		throw newError("deleteFile", err as Error);
 	}
 };
 
-const uploadFolder = async (accessToken, foldername, rootId = null) => {
+/**
+ * Create a folder in Google Drive
+ */
+export const uploadFolder = async (
+	accessToken: string,
+	foldername: string,
+	rootId: string | null = null
+): Promise<string> => {
 	try {
 		const response = await requestUrl({
 			url: "https://www.googleapis.com/drive/v3/files?uploadType=multipart",
@@ -152,17 +206,23 @@ const uploadFolder = async (accessToken, foldername, rootId = null) => {
 				name: foldername,
 				parents: rootId ? [rootId] : [],
 			}),
-		}).catch((e) => console.log(e));
+		}).catch((e) => console.log(e)) as RequestUrlResponse;
 
-		var id = response.json.id;
+		const id = response.json.id;
 		return id;
 	} catch (err) {
 		console.log(err);
-		throw newError("uploadFolder", err);
+		throw newError("uploadFolder", err as Error);
 	}
 };
 
-const getFilesList = async (accessToken, vault) => {
+/**
+ * Get list of files in a vault folder
+ */
+export const getFilesList = async (
+	accessToken: string,
+	vault: string
+): Promise<DriveFileInfo[]> => {
 	try {
 		const response = await requestUrl({
 			url:
@@ -177,11 +237,11 @@ const getFilesList = async (accessToken, vault) => {
 			},
 			contentType: "application/json",
 		});
-		let files = response.json.files;
+		let files: DriveFileInfo[] = response.json.files;
 		let isNextPageAvailable = response.json.nextPageToken ? true : false;
 		let nextPageToken = response.json.nextPageToken;
 		while (isNextPageAvailable) {
-			const response = await requestUrl({
+			const pageResponse = await requestUrl({
 				url:
 					"https://www.googleapis.com/drive/v3/files" +
 					(vault != null
@@ -195,62 +255,76 @@ const getFilesList = async (accessToken, vault) => {
 				},
 				contentType: "application/json",
 			});
-			files = files.concat(response.json.files);
-			isNextPageAvailable = response.json.nextPageToken ? true : false;
-			nextPageToken = response.json.nextPageToken;
+			files = files.concat(pageResponse.json.files);
+			isNextPageAvailable = pageResponse.json.nextPageToken ? true : false;
+			nextPageToken = pageResponse.json.nextPageToken;
 		}
 		return files;
 	} catch (err) {
 		console.log(err);
-		throw newError("getFilesList", err);
+		throw newError("getFilesList", err as Error);
 	}
 };
 
-const getFoldersList = async (accessToken, vault = null) => {
+/**
+ * Get list of folders
+ */
+export const getFoldersList = async (
+	accessToken: string,
+	vault: string | null = null
+): Promise<DriveFolderInfo[]> => {
 	try {
 		const response = await requestUrl({
 			url:
 				"https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.folder%27" +
-				(vault != null ? `%20and%20'${vault}'%20in%20parents` : "") + "&fields=files(name%2Cid)&orderBy=createdTime&pageSize=1000",
+				(vault != null ? `%20and%20'${vault}'%20in%20parents` : "") +
+				"&fields=files(name%2Cid)&orderBy=createdTime&pageSize=1000",
 			method: "GET",
 			headers: {
 				Authorization: `Bearer ${accessToken}`,
 				Accept: "application/json",
 			},
 		});
-		let folders = response.json.files;
+		let folders: DriveFolderInfo[] = response.json.files;
 		console.log(folders);
 		let isNextPageAvailable = response.json.nextPageToken ? true : false;
 		let nextPageToken = response.json.nextPageToken;
 		while (isNextPageAvailable) {
-			const response = await requestUrl({
+			const pageResponse = await requestUrl({
 				url:
 					"https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.folder%27" +
-					(vault != null ? `%20and%20'${vault}'%20in%20parents` : "") + "&fields=files(name%2Cid)&orderBy=createdTime&pageSize=1000" +
+					(vault != null ? `%20and%20'${vault}'%20in%20parents` : "") +
+					"&fields=files(name%2Cid)&orderBy=createdTime&pageSize=1000" +
 					`&pageToken=${nextPageToken}`,
 				method: "GET",
 				headers: {
 					Authorization: `Bearer ${accessToken}`,
 				},
 			});
-			folders = folders.concat(response.json.files);
-			isNextPageAvailable = response.json.nextPageToken ? true : false;
-			nextPageToken = response.json.nextPageToken;
+			folders = folders.concat(pageResponse.json.files);
+			isNextPageAvailable = pageResponse.json.nextPageToken ? true : false;
+			nextPageToken = pageResponse.json.nextPageToken;
 		}
 		return folders;
 	} catch (err) {
 		console.log(err);
-		throw newError("getFoldersList", err);
+		throw newError("getFoldersList", err as Error);
 	}
 };
-const getFile = async (accessToken, fileId) => {
+
+/**
+ * Download a file from Google Drive
+ */
+export const getFile = async (
+	accessToken: string,
+	fileId: string
+): Promise<[string, ArrayBuffer]> => {
 	try {
 		const responseBuffer = await requestUrl({
 			url:
 				"https://www.googleapis.com/drive/v3/files/" +
 				fileId +
 				"?alt=media",
-
 			method: "GET",
 			headers: {
 				Authorization: `Bearer ${accessToken}`,
@@ -266,16 +340,20 @@ const getFile = async (accessToken, fileId) => {
 		return [responseName.json.name, responseBuffer.arrayBuffer];
 	} catch (err) {
 		console.log(err);
-		throw newError("getFile", err);
+		throw newError("getFile", err as Error);
 	}
 };
 
-const getFileInfo = async (accessToken, id) => {
+/**
+ * Get file metadata from Google Drive
+ */
+export const getFileInfo = async (
+	accessToken: string,
+	id: string
+): Promise<RequestUrlResponse> => {
 	try {
 		const response = await requestUrl({
-			url:
-				`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime%2Cname%2Cid%2CmimeType`
-			,
+			url: `https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime%2Cname%2Cid%2CmimeType`,
 			method: "GET",
 			headers: {
 				Authorization: `Bearer ${accessToken}`,
@@ -285,19 +363,6 @@ const getFileInfo = async (accessToken, id) => {
 		return response;
 	} catch (err) {
 		console.log(err);
-		throw newError("getFileInfo", err);
+		throw newError("getFileInfo", err as Error);
 	}
-};
-
-export {
-	getVaultId,
-	getFilesList,
-	getFoldersList,
-	uploadFile,
-	uploadFolder,
-	getFile,
-	renameFile,
-	deleteFile,
-	modifyFile,
-	getFileInfo
 };
