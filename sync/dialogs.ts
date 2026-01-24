@@ -328,7 +328,7 @@ export class ConfirmFullSyncDialog extends Modal {
 			)
 			.addButton(btn =>
 				btn
-					.setButtonText('Cancel')
+					.setButtonText(t('cancel'))
 					.onClick(() => {
 						this.close();
 						this.onCancel();
@@ -363,7 +363,7 @@ export class ConfirmDialog extends Modal {
 		new Setting(contentEl)
 			.addButton(btn =>
 				btn
-					.setButtonText('OK')
+					.setButtonText(t('ok'))
 					.setCta()
 					.setWarning()
 					.onClick(() => {
@@ -373,7 +373,7 @@ export class ConfirmDialog extends Modal {
 			)
 			.addButton(btn =>
 				btn
-					.setButtonText('Cancel')
+					.setButtonText(t('cancel'))
 					.onClick(() => {
 						this.close();
 					})
@@ -440,7 +440,7 @@ export class ModifiedFilesNoticeDialog extends Modal {
 		new Setting(contentEl)
 			.addButton(btn =>
 				btn
-					.setButtonText('OK')
+					.setButtonText(t('ok'))
 					.setCta()
 					.onClick(() => {
 						this.close();

@@ -42,6 +42,7 @@ import {
 	ModifiedFilesNoticeDialog,
 	ModifiedDeleteInfo,
 } from './dialogs';
+import { t } from './i18n';
 
 /** Default concurrency for parallel operations */
 const DEFAULT_CONCURRENCY = 5;
@@ -221,7 +222,7 @@ export class SyncEngine {
 	 */
 	async pushChanges(): Promise<void> {
 		this.refreshSettings();
-		new Notice('Checking for changes...');
+		new Notice(t('checkingChanges'));
 
 		try {
 			const filesList = await this.refreshFilesList();
@@ -234,7 +235,7 @@ export class SyncEngine {
 
 			// Case: No remote meta - full upload
 			if (!remoteMeta) {
-				new Notice('No remote sync data found. Uploading vault...');
+				new Notice(t('noRemoteData'));
 				await this.pushAll(true);
 				return;
 			}
@@ -278,7 +279,7 @@ export class SyncEngine {
 							await this.handleConflictsAndPush(resolutions, currentLocalMeta, remoteMeta, filesList);
 						},
 						() => {
-							new Notice('Push cancelled.');
+							new Notice(t('pushCancelled'));
 						},
 						this.settings.conflictFolder
 					).open();
@@ -317,7 +318,7 @@ export class SyncEngine {
 						await this.handleConflictsAndPush(resolutions, currentLocalMeta, remoteMeta, filesList);
 					},
 					() => {
-						new Notice('Push cancelled.');
+						new Notice(t('pushCancelled'));
 					},
 					this.settings.conflictFolder
 				).open();
@@ -330,7 +331,7 @@ export class SyncEngine {
 
 		} catch (err) {
 			console.error('Push failed:', err);
-			new Notice('Push failed. Check console for details.');
+			new Notice(t('pushFailed'));
 		}
 	}
 
@@ -477,7 +478,7 @@ export class SyncEngine {
 
 			setTimeout(() => {
 				progress.close();
-				new Notice('Push complete!');
+				new Notice(t('pushComplete'));
 			}, 1500);
 
 		} catch (err) {
@@ -491,7 +492,7 @@ export class SyncEngine {
 	 */
 	async pullChanges(): Promise<void> {
 		this.refreshSettings();
-		new Notice('Checking for changes...');
+		new Notice(t('checkingChanges'));
 
 		try {
 			const filesList = await this.refreshFilesList();
@@ -504,7 +505,7 @@ export class SyncEngine {
 
 			// Case: No remote meta - nothing to pull
 			if (!remoteMeta) {
-				new Notice('No remote sync data found. Nothing to pull.');
+				new Notice(t('noRemoteDataPull'));
 				return;
 			}
 
@@ -546,7 +547,7 @@ export class SyncEngine {
 							await this.performPull(remoteMeta, filesList, resolutions);
 						},
 						() => {
-							new Notice('Pull cancelled.');
+							new Notice(t('pullCancelled'));
 						},
 						this.settings.conflictFolder
 					).open();
@@ -585,7 +586,7 @@ export class SyncEngine {
 						await this.performPull(remoteMeta, filesList, resolutions);
 					},
 					() => {
-						new Notice('Pull cancelled.');
+						new Notice(t('pullCancelled'));
 					},
 					this.settings.conflictFolder
 				).open();
@@ -594,7 +595,7 @@ export class SyncEngine {
 
 			// Check if local is same or newer - nothing to pull
 			if (localMeta.lastUpdatedAt >= remoteMeta.lastUpdatedAt && diff.toDownload.length === 0) {
-				new Notice('Already up to date.');
+				new Notice(t('alreadyUpToDate'));
 				return;
 			}
 
@@ -602,7 +603,7 @@ export class SyncEngine {
 
 		} catch (err) {
 			console.error('Pull failed:', err);
-			new Notice('Pull failed. Check console for details.');
+			new Notice(t('pullFailed'));
 		}
 	}
 
@@ -748,7 +749,7 @@ export class SyncEngine {
 
 			setTimeout(() => {
 				progress.close();
-				new Notice('Pull complete!');
+				new Notice(t('pullComplete'));
 			}, 1500);
 
 		} catch (err) {
@@ -825,13 +826,13 @@ export class SyncEngine {
 
 				setTimeout(() => {
 					progress.close();
-					new Notice('Full push complete!');
+					new Notice(t('fullPushComplete'));
 				}, 1500);
 
 			} catch (err) {
 				progress.close();
 				console.error('Full push failed:', err);
-				new Notice('Full push failed. Check console for details.');
+				new Notice(t('fullPushFailed'));
 			}
 		};
 
@@ -844,7 +845,7 @@ export class SyncEngine {
 				'This will upload all local files to Google Drive, overwriting any existing remote versions. Continue?',
 				'Push All',
 				doPush,
-				() => new Notice('Full push cancelled.')
+				() => new Notice(t('fullPushCancelled'))
 			).open();
 		}
 	}
@@ -874,7 +875,7 @@ export class SyncEngine {
 
 					if (!remoteMeta) {
 						progress.close();
-						new Notice('No remote sync data found. Nothing to pull.');
+						new Notice(t('noRemoteDataPull'));
 						return;
 					}
 
@@ -905,16 +906,16 @@ export class SyncEngine {
 
 					setTimeout(() => {
 						progress.close();
-						new Notice('Full pull complete!');
+						new Notice(t('fullPullComplete'));
 					}, 1500);
 
 				} catch (err) {
 					progress.close();
 					console.error('Full pull failed:', err);
-					new Notice('Full pull failed. Check console for details.');
+					new Notice(t('fullPullFailed'));
 				}
 			},
-			() => new Notice('Full pull cancelled.')
+			() => new Notice(t('fullPullCancelled'))
 		).open();
 	}
 

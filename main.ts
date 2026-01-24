@@ -42,8 +42,8 @@ const getAccessToken = async (
 		})
 		.catch((err) => {
 			if ((err.code = "ERR_NETWORK") && showError) {
-				new Notice("Oops! Network error :(");
-				new Notice("Or maybe no refresh token provided?", 5000);
+				new Notice(t("networkError"));
+				new Notice(t("noRefreshToken"), 5000);
 				response = "network_error";
 			} else {
 				response = "error";
@@ -155,27 +155,27 @@ export default class DriveSyncPlugin extends Plugin {
 			await this.writeToVerboseLogFile("LOG: Entering cleanInstall");
 			if (!this.settings.rootFolderId) {
 				await this.writeToErrorLogFile(new Error("ERROR: Root folder does not exist"));
-				new Notice("ERROR: Root folder does not exist. Please reload the plug-in.");
-				new Notice("If this error persists, please check if there is a folder named 'obsidian' in your Google Drive.");
+				new Notice(t("rootFolderNotExist"));
+				new Notice(t("rootFolderCheckHint"));
 				return;
 			}
-			new Notice("Creating vault in Google Drive...");
+			new Notice(t("creatingVault"));
 			var res = await uploadFolder(
 				this.settings.accessToken,
 				this.app.vault.getName(),
 				this.settings.rootFolderId
 			);
 			this.settings.vaultId = res;
-			new Notice("Vault created!");
+			new Notice(t("vaultCreated"));
 
 			// Use sync engine to push all files
 			if (this.syncEngine) {
 				await this.syncEngine.pushAll(true);
 			}
 
-			new Notice("Please reload the plug-in.", 5000);
+			new Notice(t("reloadPlugin"), 5000);
 		} catch (err) {
-			new Notice("ERROR: Unable to initialize Vault in Google Drive");
+			new Notice(t("initVaultFailed"));
 			await this.writeToErrorLogFile(err);
 		}
 		await this.writeToVerboseLogFile("LOG: Exited cleanInstall");
@@ -195,7 +195,7 @@ export default class DriveSyncPlugin extends Plugin {
 
 		var count = 0;
 		while (res == "error") {
-			new Notice("ERROR: Couldn't fetch accessToken. Trying again in 5 secs, please wait...");
+			new Notice(t("fetchTokenRetry"));
 			await this.writeToErrorLogFile(new Error("ERROR: Couldn't fetch accessToken. Trying again in 5 secs."));
 			await this.writeToVerboseLogFile("LOG: failed to fetch accessToken");
 
@@ -224,8 +224,8 @@ export default class DriveSyncPlugin extends Plugin {
 			if (count == 6) {
 				this.settings.accessToken = "";
 				this.settings.validToken = false;
-				new Notice("FATAL ERROR: Connection timeout, couldn't fetch accessToken :(");
-				new Notice("Check your internet connection and restart the plugin...");
+				new Notice(t("fatalConnectionTimeout"));
+				new Notice(t("checkConnectionRestart"));
 				this.connectedToInternet = false;
 				break;
 			}
@@ -233,7 +233,7 @@ export default class DriveSyncPlugin extends Plugin {
 
 		if (res == "network_error" && this.settings.vaultId) {
 			this.connectedToInternet = false;
-			new Notice("No internet connection detected.");
+			new Notice(t("noInternet"));
 			await this.writeToVerboseLogFile("NO CONNECTION: Offline mode");
 		}
 
@@ -253,7 +253,7 @@ export default class DriveSyncPlugin extends Plugin {
 					this.settings.rootFolderId = reqFolder[0].id;
 				} else {
 					await this.writeToVerboseLogFile("LOG: rootFolder unavailable, uploading");
-					new Notice("Initializing required files");
+					new Notice(t("initializingFiles"));
 					this.settings.rootFolderId = await uploadFolder(
 						this.settings.accessToken,
 						"obsidian"
@@ -264,7 +264,7 @@ export default class DriveSyncPlugin extends Plugin {
 		} catch (err) {
 			await this.writeToVerboseLogFile("FATAL ERROR: Could not fetch rootFolder");
 			await this.writeToErrorLogFile(err);
-			new Notice("FATAL ERROR: Could not fetch rootFolder");
+			new Notice(t("fetchRootFolderFailed"));
 			await this.writeToVerboseLogFile("LOG: adding settings UI");
 			this.addSettingTab(new SyncSettingsTab(this.app, this));
 			return;
@@ -281,10 +281,10 @@ export default class DriveSyncPlugin extends Plugin {
 			} catch (err) {
 				await this.writeToErrorLogFile(err);
 				if (this.connectedToInternet && !this.settings.vaultId) {
-					new Notice("FATAL ERROR: Couldn't get VaultID from Google Drive :(");
+					new Notice(t("getVaultIdFailed"));
 					await this.writeToVerboseLogFile("FATAL ERROR: Couldn't get VaultID from Google Drive :(");
 				}
-				new Notice("Check internet connection and restart plugin.");
+				new Notice(t("checkConnectionReload"));
 				await this.writeToVerboseLogFile("LOG: adding settings UI");
 				this.addSettingTab(new SyncSettingsTab(this.app, this));
 				return;
@@ -293,8 +293,8 @@ export default class DriveSyncPlugin extends Plugin {
 			if (this.settings.vaultId == "NOT FOUND") {
 				await this.writeToVerboseLogFile("LOG: vault not found");
 				this.settings.vaultInit = false;
-				new Notice(`Oops! No vaults named ${this.app.vault.getName()} found in Google Drive`);
-				new Notice("Try initializing vault in Google Drive from plug-in settings :)", 5000);
+				new Notice(t("vaultNotFound", { name: this.app.vault.getName() }));
+				new Notice(t("initVaultHint"), 5000);
 			} else {
 				this.settings.vaultInit = true;
 
@@ -306,7 +306,7 @@ export default class DriveSyncPlugin extends Plugin {
 				);
 			}
 		} else {
-			new Notice("ERROR: Invalid token");
+			new Notice(t("invalidToken"));
 			this.writeToErrorLogFile(new Error("ERROR: Invalid token"));
 		}
 
@@ -325,11 +325,11 @@ export default class DriveSyncPlugin extends Plugin {
 		// Button 1: Push Changes (Local -> GDrive)
 		this.addRibbonIcon("upload-cloud", "Push Changes to GDrive", async () => {
 			if (!this.connectedToInternet) {
-				new Notice("ERROR: No internet connection!");
+				new Notice(t("noInternetError"));
 				return;
 			}
 			if (!this.syncEngine) {
-				new Notice("Sync engine not initialized. Please reload the plugin.");
+				new Notice(t("syncEngineNotInit"));
 				return;
 			}
 
@@ -347,11 +347,11 @@ export default class DriveSyncPlugin extends Plugin {
 		// Button 2: Pull Changes (GDrive -> Local)
 		this.addRibbonIcon("download-cloud", "Pull Changes from GDrive", async () => {
 			if (!this.connectedToInternet) {
-				new Notice("ERROR: No internet connection!");
+				new Notice(t("noInternetError"));
 				return;
 			}
 			if (!this.syncEngine) {
-				new Notice("Sync engine not initialized. Please reload the plugin.");
+				new Notice(t("syncEngineNotInit"));
 				return;
 			}
 
@@ -372,7 +372,7 @@ export default class DriveSyncPlugin extends Plugin {
 			name: "Push changes to Google Drive",
 			callback: async () => {
 				if (!this.connectedToInternet) {
-					new Notice("ERROR: No internet connection!");
+					new Notice(t("noInternetError"));
 					return;
 				}
 				if (this.syncEngine) {
@@ -386,7 +386,7 @@ export default class DriveSyncPlugin extends Plugin {
 			name: "Pull changes from Google Drive",
 			callback: async () => {
 				if (!this.connectedToInternet) {
-					new Notice("ERROR: No internet connection!");
+					new Notice(t("noInternetError"));
 					return;
 				}
 				if (this.syncEngine) {
@@ -400,7 +400,7 @@ export default class DriveSyncPlugin extends Plugin {
 			name: "Full push to Google Drive",
 			callback: async () => {
 				if (!this.connectedToInternet) {
-					new Notice("ERROR: No internet connection!");
+					new Notice(t("noInternetError"));
 					return;
 				}
 				if (this.syncEngine) {
@@ -414,7 +414,7 @@ export default class DriveSyncPlugin extends Plugin {
 			name: "Full pull from Google Drive",
 			callback: async () => {
 				if (!this.connectedToInternet) {
-					new Notice("ERROR: No internet connection!");
+					new Notice(t("noInternetError"));
 					return;
 				}
 				if (this.syncEngine) {
@@ -492,14 +492,14 @@ class SyncSettingsTab extends PluginSettingTab {
 
 		if (this.plugin.settings.validToken) {
 			const sync_text = sync.createEl("div", {
-				text: "Logged in",
+				text: t("loggedIn"),
 				cls: "sync_text",
 			});
 			const sync_icons = sync.createDiv({ cls: "sync_icon_still" });
 			setIcon(sync_icons, "checkmark");
 		} else {
 			const sync_link = sync.createEl("a", {
-				text: "Open this link to log in",
+				text: t("openLinkToLogin"),
 				cls: "sync_text",
 			});
 			sync_link.href = this.plugin.settings.fetchRefreshTokenURL;
@@ -544,7 +544,7 @@ class SyncSettingsTab extends PluginSettingTab {
 
 					sync.innerHTML = "";
 					const sync_text = sync.createEl("div", {
-						text: "Checking...",
+						text: t("checking"),
 						cls: "sync_text",
 					});
 					const sync_icons = sync.createDiv({ cls: "sync_icon" });
@@ -558,24 +558,24 @@ class SyncSettingsTab extends PluginSettingTab {
 					if (res != "error") {
 						this.plugin.settings.accessToken = res.access_token;
 						this.plugin.settings.validToken = true;
-						new Notice("Logged in successfully");
+						new Notice(t("loggedInSuccess"));
 						sync.innerHTML = "";
 						const sync_text = sync.createEl("div", {
-							text: "Logged in",
+							text: t("loggedIn"),
 							cls: "sync_text",
 						});
 						const sync_icons = sync.createDiv({
 							cls: "sync_icon_still",
 						});
 						setIcon(sync_icons, "checkmark");
-						new Notice("Please reload the plug-in", 5000);
+						new Notice(t("reloadPlugin"), 5000);
 					} else {
 						this.plugin.settings.accessToken = "";
 						this.plugin.settings.validToken = false;
-						new Notice("Log in failed");
+						new Notice(t("logInFailed"));
 						sync.innerHTML = "";
 						const sync_link = sync.createEl("a", {
-							text: "Open this link to log in",
+							text: t("openLinkToLogin"),
 							cls: "sync_text",
 						});
 						sync_link.href = this.plugin.settings.fetchRefreshTokenURL;
@@ -605,7 +605,7 @@ class SyncSettingsTab extends PluginSettingTab {
 							this.plugin.settings.accessToken,
 							"obsidian"
 						);
-						new Notice("Root folder created, please reload the plugin.");
+						new Notice(t("rootFolderCreated"));
 						this.plugin.saveSettings();
 					});
 				});
@@ -646,7 +646,7 @@ class SyncSettingsTab extends PluginSettingTab {
 			lastUpdatedSetting.setDesc(`${t("lastUpdatedAtDesc")}: ${dateStr}`);
 		});
 
-		containerEl.createEl("h3", { text: "Conflict Resolution" });
+		containerEl.createEl("h3", { text: t("conflictResolution") });
 
 		new Setting(containerEl)
 			.setName(t("conflictFolderName"))
@@ -718,7 +718,7 @@ class SyncSettingsTab extends PluginSettingTab {
 		// Load excluded files asynchronously
 		this.loadExcludedFiles(excludedFilesList, loadingEl);
 
-		containerEl.createEl("h3", { text: "Full Sync Operations" });
+		containerEl.createEl("h3", { text: t("fullSyncOperations") });
 
 		new Setting(containerEl)
 			.setName("Full Push")
@@ -745,6 +745,69 @@ class SyncSettingsTab extends PluginSettingTab {
 					}
 				});
 			});
+	}
+
+	/**
+	 * Helper to delete excluded files from remote and update meta
+	 */
+	private createDeleteHandler(
+		files: { id: string; name: string }[],
+		dialogTitle: string,
+		successMessage: string,
+		setting: Setting,
+		button: any
+	): () => void {
+		return () => {
+			const fileNames = files.map(f => f.name);
+			new DeleteExcludedFilesDialog(
+				this.app,
+				dialogTitle,
+				fileNames,
+				async () => {
+					button.setDisabled(true);
+					button.setButtonText(t("deleting"));
+
+					try {
+						for (const file of files) {
+							await deleteFile(this.plugin.settings.accessToken, file.id);
+						}
+
+						// Update remote meta to remove deleted files
+						const newFilesList = await getFilesList(
+							this.plugin.settings.accessToken,
+							this.plugin.settings.vaultId
+						);
+						const remoteMeta = await readRemoteMeta(
+							this.plugin.settings.accessToken,
+							this.plugin.settings.vaultId,
+							newFilesList
+						);
+						if (remoteMeta) {
+							for (const file of files) {
+								delete remoteMeta.files[file.name];
+							}
+							await writeRemoteMeta(
+								this.plugin.settings.accessToken,
+								this.plugin.settings.vaultId,
+								remoteMeta,
+								newFilesList
+							);
+						}
+
+						new Notice(successMessage);
+						setting.settingEl.remove();
+					} catch (err) {
+						console.error("Failed to delete files:", err);
+						new Notice(t("deleteFailed"));
+						button.setDisabled(false);
+						button.setButtonText(t("deleteFromRemote"));
+					}
+				},
+				() => {
+					// Cancel - do nothing
+				}
+			).open();
+		};
 	}
 
 	/**
@@ -830,57 +893,13 @@ class SyncSettingsTab extends PluginSettingTab {
 				setting.addButton((button) => {
 					button.setButtonText(t("deleteFromRemote"));
 					button.setWarning();
-					button.onClick(() => {
-						const fileNames = data.files.map(f => f.name);
-						new DeleteExcludedFilesDialog(
-							this.app,
-							t("deleteExcludedTitle", { name: dirName }),
-							fileNames,
-							async () => {
-								button.setDisabled(true);
-								button.setButtonText(t("deleting"));
-
-								try {
-									for (const file of data.files) {
-										await deleteFile(this.plugin.settings.accessToken, file.id);
-									}
-
-									// Update remote meta to remove deleted files
-									const newFilesList = await getFilesList(
-										this.plugin.settings.accessToken,
-										this.plugin.settings.vaultId
-									);
-									const remoteMeta = await readRemoteMeta(
-										this.plugin.settings.accessToken,
-										this.plugin.settings.vaultId,
-										newFilesList
-									);
-									if (remoteMeta) {
-										for (const file of data.files) {
-											delete remoteMeta.files[file.name];
-										}
-										await writeRemoteMeta(
-											this.plugin.settings.accessToken,
-											this.plugin.settings.vaultId,
-											remoteMeta,
-											newFilesList
-										);
-									}
-
-									new Notice(t("deletedFiles", { count: data.files.length.toString() }));
-									setting.settingEl.remove();
-								} catch (err) {
-									console.error("Failed to delete files:", err);
-									new Notice(t("deleteFailed"));
-									button.setDisabled(false);
-									button.setButtonText(t("deleteFromRemote"));
-								}
-							},
-							() => {
-								// Cancel - do nothing
-							}
-						).open();
-					});
+					button.onClick(this.createDeleteHandler(
+						data.files,
+						t("deleteExcludedTitle", { name: dirName }),
+						t("deletedFiles", { count: data.files.length.toString() }),
+						setting,
+						button
+					));
 				});
 			}
 
@@ -893,52 +912,13 @@ class SyncSettingsTab extends PluginSettingTab {
 				setting.addButton((button) => {
 					button.setButtonText(t("deleteFromRemote"));
 					button.setWarning();
-					button.onClick(() => {
-						new DeleteExcludedFilesDialog(
-							this.app,
-							t("deleteFileTitle"),
-							[file.name],
-							async () => {
-								button.setDisabled(true);
-								button.setButtonText(t("deleting"));
-
-								try {
-									await deleteFile(this.plugin.settings.accessToken, file.id);
-
-									// Update remote meta
-									const newFilesList = await getFilesList(
-										this.plugin.settings.accessToken,
-										this.plugin.settings.vaultId
-									);
-									const remoteMeta = await readRemoteMeta(
-										this.plugin.settings.accessToken,
-										this.plugin.settings.vaultId,
-										newFilesList
-									);
-									if (remoteMeta) {
-										delete remoteMeta.files[file.name];
-										await writeRemoteMeta(
-											this.plugin.settings.accessToken,
-											this.plugin.settings.vaultId,
-											remoteMeta,
-											newFilesList
-										);
-									}
-
-									new Notice(t("deletedFile", { name: file.name }));
-									setting.settingEl.remove();
-								} catch (err) {
-									console.error("Failed to delete file:", err);
-									new Notice(t("deleteFailed"));
-									button.setDisabled(false);
-									button.setButtonText(t("deleteFromRemote"));
-								}
-							},
-							() => {
-								// Cancel - do nothing
-							}
-						).open();
-					});
+					button.onClick(this.createDeleteHandler(
+						[file],
+						t("deleteFileTitle"),
+						t("deletedFile", { name: file.name }),
+						setting,
+						button
+					));
 				});
 			}
 
