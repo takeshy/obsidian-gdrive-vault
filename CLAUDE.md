@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Workflow
+
+- **DO NOT bump versions on `main` branch** - Releases are done from `master` branch
+- Version bumping (`package.json`, `manifest.json`, `versions.json`) should only be done on `master`
+- GitHub Actions create releases from `master` branch
+
 ## Project Overview
 
 This is an Obsidian plugin that syncs vault files to Google Drive. It provides automatic synchronization, offline support with pending sync queue, and cross-device vault access.
