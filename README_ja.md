@@ -60,6 +60,8 @@ Obsidian用の手動同期プラグイン。VaultをGoogle Driveに同期しま�
 4. プラグインを再読み込み
 5. 「Initialize vault」をクリックしてGoogle DriveにVaultフォルダを作成
 
+![初期設定](initial_setting.png)
+
 追加デバイスの場合:
 1. 同じ名前のVaultを作成
 2. フォークからプラグインをインストール
@@ -96,6 +98,8 @@ Obsidian用の手動同期プラグイン。VaultをGoogle Driveに同期しま�
 | Remote Excluded Files | 現在の除外パターンに一致するリモートファイルの表示・削除 |
 | Full Push | Vault全体をアップロード |
 | Full Pull | Vault全体をダウンロード |
+
+![設定画面](settings.png)
 
 デフォルト除外パターン:
 - `.obsidian/**` - Obsidian設定フォルダ
@@ -169,6 +173,8 @@ Obsidian用の手動同期プラグイン。VaultをGoogle Driveに同期しま�
 ### 同期完了ダイアログ
 
 同期完了後、実際に転送されたファイルの一覧がダイアログで表示されます:
+
+![アップロード完了](uploaded.png)
 
 **Push Changes:**
 - Google Driveに**アップロード**されたファイルを表示
