@@ -438,7 +438,46 @@ class SyncSettingsTab extends PluginSettingTab {
 
 					if (res != "error") {
 						this.plugin.settings.accessToken = res.access_token;
+						this.plugin.settings.accessTokenExpiryTime = res.expiry_date;
 						this.plugin.settings.validToken = true;
+
+						// Get or create root folder
+						try {
+							const folders = await getFoldersList(this.plugin.settings.accessToken);
+							const reqFolder = folders.filter((folder: any) => folder.name == "obsidian");
+
+							if (reqFolder.length) {
+								this.plugin.settings.rootFolderId = reqFolder[0].id;
+							} else {
+								new Notice(t("initializingFiles"));
+								this.plugin.settings.rootFolderId = await uploadFolder(
+									this.plugin.settings.accessToken,
+									"obsidian"
+								);
+							}
+
+							// Check if vault exists
+							this.plugin.settings.vaultId = await getVaultId(
+								this.plugin.settings.accessToken,
+								this.app.vault.getName(),
+								this.plugin.settings.rootFolderId
+							);
+
+							if (this.plugin.settings.vaultId !== "NOT FOUND") {
+								this.plugin.settings.vaultInit = true;
+
+								// Initialize sync engine
+								this.plugin.syncEngine = new SyncEngine(
+									this.app,
+									() => this.plugin.settings,
+									() => this.plugin.saveSettings()
+								);
+								this.plugin.connectedToInternet = true;
+							}
+						} catch (err) {
+							console.error("Failed to initialize after token validation:", err);
+						}
+
 						await this.plugin.saveSettings();
 						new Notice(t("loggedInSuccess"));
 						// Re-render settings to show additional options
