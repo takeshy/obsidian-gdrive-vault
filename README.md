@@ -60,6 +60,8 @@ See [obsidian-oauth/README.md](obsidian-oauth/README.md) for detailed instructio
 4. Reload the plugin
 5. Click "Initialize vault" to create your vault folder on Google Drive
 
+![Initial Setup](initial_setting.png)
+
 For additional devices:
 1. Create a vault with the same name
 2. Install the plugin from your fork
@@ -96,6 +98,8 @@ Full sync operations compare file hashes and skip files that are already identic
 | Remote Excluded Files | View and delete files on remote that match current exclude patterns |
 | Full Push | Upload entire vault |
 | Full Pull | Download entire vault |
+
+![Settings](settings.png)
 
 Default exclude patterns:
 - `.obsidian/**` - Obsidian config folder
@@ -169,6 +173,8 @@ The conflict folder is automatically excluded from sync. Delete backup files whe
 ### Sync Completion Dialog
 
 After sync completes, a dialog shows the list of files that were actually transferred:
+
+![Upload Complete](uploaded.png)
 
 **Push Changes:**
 - Shows files that were **uploaded** to Google Drive
