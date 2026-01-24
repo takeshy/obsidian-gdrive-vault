@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-gdrive-vault",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "Manual sync to Google Drive",
 	"main": "main.js",
 	"scripts": {
