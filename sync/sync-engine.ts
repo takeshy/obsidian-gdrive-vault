@@ -786,11 +786,25 @@ export class SyncEngine {
 				);
 
 				let completed = 0;
+				let skipped = 0;
 
-				// Upload files in parallel
+				// Upload files in parallel, skipping files with matching hash
 				await parallelProcess(files, async (file) => {
 					const buffer = await this.vault.readBinary(file);
 					const driveFile = filesList.find(f => f.name === file.path);
+
+					// Check if remote has the same hash - skip if identical
+					if (driveFile && remoteMeta?.files[file.path]) {
+						const localHash = await calculateHash(buffer);
+						const remoteHash = remoteMeta.files[file.path].hash;
+
+						if (localHash === remoteHash) {
+							skipped++;
+							completed++;
+							progress.setProgress(completed, `Skipped (same): ${file.path}`);
+							return;
+						}
+					}
 
 					if (driveFile) {
 						await modifyFile(this.settings.accessToken, driveFile.id, buffer);
@@ -804,7 +818,7 @@ export class SyncEngine {
 					}
 
 					completed++;
-					progress.setProgress(completed, `Uploading: ${file.path}`);
+					progress.setProgress(completed, `Uploaded: ${file.path}`);
 				});
 
 				// Update meta files - always update timestamp for full push
@@ -822,7 +836,8 @@ export class SyncEngine {
 					newFilesList
 				);
 
-				progress.complete(`Uploaded ${files.length} files.`);
+				const uploaded = files.length - skipped;
+				progress.complete(`Uploaded ${uploaded} files, skipped ${skipped} unchanged.`);
 
 				setTimeout(() => {
 					progress.close();
@@ -887,14 +902,30 @@ export class SyncEngine {
 					progress.setTotal(remoteFiles.length);
 
 					let completed = 0;
+					let skipped = 0;
 
-					// Download files in parallel
+					// Download files in parallel, skipping files with matching hash
 					await parallelProcess(remoteFiles, async (driveFile) => {
+						// Check if local file exists and has the same hash
+						const localFile = this.vault.getAbstractFileByPath(driveFile.name);
+						if (localFile instanceof TFile && remoteMeta.files[driveFile.name]) {
+							const localBuffer = await this.vault.readBinary(localFile);
+							const localHash = await calculateHash(localBuffer);
+							const remoteHash = remoteMeta.files[driveFile.name].hash;
+
+							if (localHash === remoteHash) {
+								skipped++;
+								completed++;
+								progress.setProgress(completed, `Skipped (same): ${driveFile.name}`);
+								return;
+							}
+						}
+
 						const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
 						await this.createFileWithPath(driveFile.name, buffer);
 
 						completed++;
-						progress.setProgress(completed, `Downloading: ${driveFile.name}`);
+						progress.setProgress(completed, `Downloaded: ${driveFile.name}`);
 					});
 
 					// Update local meta
@@ -902,7 +933,8 @@ export class SyncEngine {
 					newLocalMeta.lastSyncTimestamp = new Date().toISOString();
 					await writeLocalMeta(this.vault, newLocalMeta);
 
-					progress.complete(`Downloaded ${remoteFiles.length} files.`);
+					const downloaded = remoteFiles.length - skipped;
+					progress.complete(`Downloaded ${downloaded} files, skipped ${skipped} unchanged.`);
 
 					setTimeout(() => {
 						progress.close();
