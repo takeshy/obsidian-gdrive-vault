@@ -601,6 +601,82 @@ export class DeleteExcludedFilesDialog extends Modal {
 }
 
 /**
+ * Updated file info for completion dialog
+ */
+export interface UpdatedFileInfo {
+	path: string;
+	modifiedTime: string;
+}
+
+/**
+ * Dialog to show sync completion with list of updated files
+ */
+export class SyncCompleteDialog extends Modal {
+	private title: string;
+	private summary: string;
+	private updatedFiles: UpdatedFileInfo[];
+	private skippedCount: number;
+
+	constructor(
+		app: App,
+		title: string,
+		summary: string,
+		updatedFiles: UpdatedFileInfo[],
+		skippedCount: number = 0
+	) {
+		super(app);
+		this.title = title;
+		this.summary = summary;
+		this.updatedFiles = updatedFiles;
+		this.skippedCount = skippedCount;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+
+		contentEl.createEl('h2', { text: this.title });
+		contentEl.createEl('p', { text: this.summary, cls: 'sync-complete-summary' });
+
+		if (this.updatedFiles.length > 0) {
+			contentEl.createEl('h4', { text: t('updatedFiles') });
+
+			const fileList = contentEl.createDiv({ cls: 'sync-complete-file-list' });
+
+			for (const file of this.updatedFiles) {
+				const fileEl = fileList.createDiv({ cls: 'sync-complete-file-item' });
+				fileEl.createEl('div', { text: file.path, cls: 'sync-complete-file-path' });
+				fileEl.createEl('div', {
+					text: formatDate(file.modifiedTime),
+					cls: 'sync-complete-file-time',
+				});
+			}
+		}
+
+		if (this.skippedCount > 0) {
+			contentEl.createEl('p', {
+				text: t('skippedUnchanged', { count: this.skippedCount.toString() }),
+				cls: 'sync-complete-skipped',
+			});
+		}
+
+		new Setting(contentEl)
+			.addButton(btn =>
+				btn
+					.setButtonText(t('ok'))
+					.setCta()
+					.onClick(() => {
+						this.close();
+					})
+			);
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+/**
  * CSS styles for dialogs (to be added to styles.css)
  */
 export const dialogStyles = `
@@ -862,5 +938,51 @@ export const dialogStyles = `
 	color: var(--text-error);
 	font-weight: 600;
 	margin-top: 0.5em;
+}
+
+/* Sync complete dialog */
+.sync-complete-summary {
+	color: var(--text-muted);
+	margin-bottom: 1em;
+}
+
+.sync-complete-file-list {
+	max-height: 300px;
+	overflow-y: auto;
+	margin-bottom: 1em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background-color: var(--background-secondary);
+}
+
+.sync-complete-file-item {
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+}
+
+.sync-complete-file-item:last-child {
+	border-bottom: none;
+}
+
+.sync-complete-file-path {
+	font-family: var(--font-monospace);
+	font-size: 0.85em;
+	word-break: break-all;
+	flex: 1;
+}
+
+.sync-complete-file-time {
+	font-size: 0.8em;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.sync-complete-skipped {
+	color: var(--text-muted);
+	font-size: 0.9em;
 }
 `;

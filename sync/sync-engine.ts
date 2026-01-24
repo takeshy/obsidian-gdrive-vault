@@ -41,6 +41,8 @@ import {
 	SyncProgressDialog,
 	ModifiedFilesNoticeDialog,
 	ModifiedDeleteInfo,
+	SyncCompleteDialog,
+	UpdatedFileInfo,
 } from './dialogs';
 import { t } from './i18n';
 
@@ -787,6 +789,7 @@ export class SyncEngine {
 
 				let completed = 0;
 				let skipped = 0;
+				const updatedFiles: UpdatedFileInfo[] = [];
 
 				// Upload files in parallel, skipping files with matching hash
 				await parallelProcess(files, async (file) => {
@@ -817,6 +820,11 @@ export class SyncEngine {
 						);
 					}
 
+					updatedFiles.push({
+						path: file.path,
+						modifiedTime: new Date(file.stat.mtime).toISOString(),
+					});
+
 					completed++;
 					progress.setProgress(completed, `Uploaded: ${file.path}`);
 				});
@@ -836,13 +844,17 @@ export class SyncEngine {
 					newFilesList
 				);
 
-				const uploaded = files.length - skipped;
-				progress.complete(`Uploaded ${uploaded} files, skipped ${skipped} unchanged.`);
+				progress.close();
 
-				setTimeout(() => {
-					progress.close();
-					new Notice(t('fullPushComplete'));
-				}, 1500);
+				// Show completion dialog with file list
+				const uploaded = files.length - skipped;
+				new SyncCompleteDialog(
+					this.app,
+					t('uploadComplete'),
+					`${uploaded} ${t('updatedFiles').toLowerCase()}`,
+					updatedFiles,
+					skipped
+				).open();
 
 			} catch (err) {
 				progress.close();
@@ -903,6 +915,7 @@ export class SyncEngine {
 
 					let completed = 0;
 					let skipped = 0;
+					const updatedFiles: UpdatedFileInfo[] = [];
 
 					// Download files in parallel, skipping files with matching hash
 					await parallelProcess(remoteFiles, async (driveFile) => {
@@ -924,6 +937,13 @@ export class SyncEngine {
 						const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
 						await this.createFileWithPath(driveFile.name, buffer);
 
+						// Use remote meta's modified time or drive file's modified time
+						const modifiedTime = remoteMeta.files[driveFile.name]?.modifiedTime || driveFile.modifiedTime;
+						updatedFiles.push({
+							path: driveFile.name,
+							modifiedTime,
+						});
+
 						completed++;
 						progress.setProgress(completed, `Downloaded: ${driveFile.name}`);
 					});
@@ -933,13 +953,17 @@ export class SyncEngine {
 					newLocalMeta.lastSyncTimestamp = new Date().toISOString();
 					await writeLocalMeta(this.vault, newLocalMeta);
 
-					const downloaded = remoteFiles.length - skipped;
-					progress.complete(`Downloaded ${downloaded} files, skipped ${skipped} unchanged.`);
+					progress.close();
 
-					setTimeout(() => {
-						progress.close();
-						new Notice(t('fullPullComplete'));
-					}, 1500);
+					// Show completion dialog with file list
+					const downloaded = remoteFiles.length - skipped;
+					new SyncCompleteDialog(
+						this.app,
+						t('downloadComplete'),
+						`${downloaded} ${t('updatedFiles').toLowerCase()}`,
+						updatedFiles,
+						skipped
+					).open();
 
 				} catch (err) {
 					progress.close();

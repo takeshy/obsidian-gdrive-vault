@@ -130,6 +130,12 @@ const translations = {
 		// Section Headers
 		conflictResolution: 'Conflict Resolution',
 		fullSyncOperations: 'Full Sync Operations',
+
+		// Sync Complete Dialog
+		updatedFiles: 'Updated files',
+		skippedUnchanged: 'Skipped {count} unchanged file(s)',
+		uploadComplete: 'Upload Complete',
+		downloadComplete: 'Download Complete',
 	},
 	ja: {
 		// Common
@@ -256,6 +262,12 @@ const translations = {
 		// Section Headers
 		conflictResolution: '競合解決',
 		fullSyncOperations: 'フル同期操作',
+
+		// Sync Complete Dialog
+		updatedFiles: '更新されたファイル',
+		skippedUnchanged: '未変更の{count}ファイルをスキップしました',
+		uploadComplete: 'アップロード完了',
+		downloadComplete: 'ダウンロード完了',
 	},
 };
 
