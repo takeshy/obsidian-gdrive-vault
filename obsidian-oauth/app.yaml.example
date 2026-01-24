@@ -1,0 +1,6 @@
+runtime: nodejs22
+
+env_variables:
+  CLIENT_ID: "YOUR_CLIENT_ID"
+  CLIENT_SECRET: "YOUR_CLIENT_SECRET"
+  REDIRECT_URI: "https://YOUR_PROJECT.appspot.com/auth/obsidian/callback"
