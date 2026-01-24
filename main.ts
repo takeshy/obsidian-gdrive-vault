@@ -24,9 +24,6 @@ import { t } from "./sync/i18n";
 import { readLocalMeta, shouldExclude, readRemoteMeta, writeRemoteMeta } from "./sync/meta";
 import { OAUTH_CONFIG } from "./config";
 
-const ERROR_LOG_FILE_NAME = "error-log-gdrive-plugin.md";
-const VERBOSE_LOG_FILE_NAME = "verbose-log-gdrive-plugin.md";
-
 const getAccessToken = async (
 	refreshToken: string,
 	refreshAccessTokenURL: string,
@@ -63,8 +60,6 @@ const DEFAULT_SETTINGS: DriveSettings = {
 	filesList: [],
 	vaultInit: false,
 	rootFolderId: "",
-	errorLoggingToFile: false,
-	verboseLoggingToFile: false,
 	excludePatterns: [".obsidian/**", ".**", ".*/**", `${DEFAULT_CONFLICT_FOLDER}/**`],
 	conflictFolder: DEFAULT_CONFLICT_FOLDER,
 };
@@ -74,87 +69,13 @@ export default class DriveSyncPlugin extends Plugin {
 	syncEngine: SyncEngine | null = null;
 	statusBarItem = this.addStatusBarItem().createEl("span", "sync_icon_still");
 	connectedToInternet: boolean = false;
-	verboseLoggingForTheFirstTimeInThisSession: boolean = true;
-	errorLoggingForTheFirstTimeInThisSession: boolean = true;
 	adapter: FileSystemAdapter;
 	layoutReady: boolean = false;
 	styleEl: HTMLStyleElement | null = null;
 
-	writeToErrorLogFile = async (log: Error) => {
-		if (!this.app.workspace.layoutReady || !this.layoutReady) {
-			return;
-		}
-		if (!this.settings.errorLoggingToFile) {
-			return;
-		}
-		const { vault } = this.app;
-		let errorLogFile = vault.getAbstractFileByPath(ERROR_LOG_FILE_NAME);
-		console.log(log.stack, "logging");
-
-		let content: string;
-
-		try {
-			if (errorLogFile) {
-				content = !this.errorLoggingForTheFirstTimeInThisSession
-					? await vault.read(errorLogFile as any)
-					: "";
-				await vault.modify(
-					errorLogFile as any,
-					`${content}\n\n${new Date().toString()}-${log.name}-${log.message}-${log.stack}`
-				);
-				this.errorLoggingForTheFirstTimeInThisSession = false;
-			} else {
-				try {
-					await vault.create(
-						ERROR_LOG_FILE_NAME,
-						`${new Date().toString()}-${log.name}-${log.message}-${log.stack}`
-					);
-				} catch (err) {
-					console.log("CAUGHT: ERROR for ERROR LOGS: Probably during startup");
-				}
-			}
-		} catch (err) {
-			console.log(err);
-		}
-	};
-
-	writeToVerboseLogFile = async (log: string) => {
-		if (!this.app.workspace.layoutReady || !this.layoutReady) {
-			return;
-		}
-		if (!this.settings.verboseLoggingToFile) {
-			return;
-		}
-		const { vault } = this.app;
-		let verboseLogFile = vault.getAbstractFileByPath(VERBOSE_LOG_FILE_NAME);
-		console.log(log);
-
-		let content: string;
-
-		try {
-			if (verboseLogFile) {
-				content = !this.verboseLoggingForTheFirstTimeInThisSession
-					? await vault.read(verboseLogFile as any)
-					: "";
-				await vault.modify(verboseLogFile as any, `${content}\n\n${log}`);
-				this.verboseLoggingForTheFirstTimeInThisSession = false;
-			} else {
-				try {
-					await vault.create(VERBOSE_LOG_FILE_NAME, `${log}`);
-				} catch (err) {
-					console.log("CAUGHT: ERROR for VERBOSE LOGS: Probably during startup");
-				}
-			}
-		} catch (err) {
-			console.log(err);
-		}
-	};
-
 	cleanInstall = async () => {
 		try {
-			await this.writeToVerboseLogFile("LOG: Entering cleanInstall");
 			if (!this.settings.rootFolderId) {
-				await this.writeToErrorLogFile(new Error("ERROR: Root folder does not exist"));
 				new Notice(t("rootFolderNotExist"));
 				new Notice(t("rootFolderCheckHint"));
 				return;
@@ -176,9 +97,8 @@ export default class DriveSyncPlugin extends Plugin {
 			new Notice(t("reloadPlugin"), 5000);
 		} catch (err) {
 			new Notice(t("initVaultFailed"));
-			await this.writeToErrorLogFile(err);
+			console.error("cleanInstall error:", err);
 		}
-		await this.writeToVerboseLogFile("LOG: Exited cleanInstall");
 	};
 
 	initFunction = async () => {
@@ -186,7 +106,6 @@ export default class DriveSyncPlugin extends Plugin {
 		this.layoutReady = true;
 		await this.loadSettings();
 
-		await this.writeToVerboseLogFile("LOG: getAccessToken");
 		var res: any = await getAccessToken(
 			this.settings.refreshToken,
 			this.settings.refreshAccessTokenURL,
@@ -196,11 +115,8 @@ export default class DriveSyncPlugin extends Plugin {
 		var count = 0;
 		while (res == "error") {
 			new Notice(t("fetchTokenRetry"));
-			await this.writeToErrorLogFile(new Error("ERROR: Couldn't fetch accessToken. Trying again in 5 secs."));
-			await this.writeToVerboseLogFile("LOG: failed to fetch accessToken");
 
 			if (!this.settings.refreshToken) {
-				await this.writeToVerboseLogFile("LOG: no refreshToken");
 				break;
 			}
 
@@ -214,7 +130,6 @@ export default class DriveSyncPlugin extends Plugin {
 			}, 5000);
 			await promise;
 
-			await this.writeToVerboseLogFile("LOG: trying to fetch accessToken again");
 			res = await getAccessToken(
 				this.settings.refreshToken,
 				this.settings.refreshAccessTokenURL
@@ -234,13 +149,11 @@ export default class DriveSyncPlugin extends Plugin {
 		if (res == "network_error" && this.settings.vaultId) {
 			this.connectedToInternet = false;
 			new Notice(t("noInternet"));
-			await this.writeToVerboseLogFile("NO CONNECTION: Offline mode");
 		}
 
 		try {
 			if (res != "error" && res != "network_error") {
 				this.connectedToInternet = true;
-				await this.writeToVerboseLogFile("LOG: received accessToken");
 				this.settings.accessToken = res.access_token;
 				this.settings.accessTokenExpiryTime = res.expiry_date;
 				this.settings.validToken = true;
@@ -249,10 +162,8 @@ export default class DriveSyncPlugin extends Plugin {
 				var reqFolder = folders.filter((folder: any) => folder.name == "obsidian");
 
 				if (reqFolder.length) {
-					await this.writeToVerboseLogFile("LOG: rootFolder available");
 					this.settings.rootFolderId = reqFolder[0].id;
 				} else {
-					await this.writeToVerboseLogFile("LOG: rootFolder unavailable, uploading");
 					new Notice(t("initializingFiles"));
 					this.settings.rootFolderId = await uploadFolder(
 						this.settings.accessToken,
@@ -262,36 +173,30 @@ export default class DriveSyncPlugin extends Plugin {
 				this.saveSettings();
 			}
 		} catch (err) {
-			await this.writeToVerboseLogFile("FATAL ERROR: Could not fetch rootFolder");
-			await this.writeToErrorLogFile(err);
+			console.error("Failed to fetch rootFolder:", err);
 			new Notice(t("fetchRootFolderFailed"));
-			await this.writeToVerboseLogFile("LOG: adding settings UI");
 			this.addSettingTab(new SyncSettingsTab(this.app, this));
 			return;
 		}
 
 		if (this.settings.validToken) {
 			try {
-				await this.writeToVerboseLogFile("LOG: getting vault id");
 				this.settings.vaultId = await getVaultId(
 					this.settings.accessToken,
 					this.app.vault.getName(),
 					this.settings.rootFolderId
 				);
 			} catch (err) {
-				await this.writeToErrorLogFile(err);
+				console.error("Failed to get vault ID:", err);
 				if (this.connectedToInternet && !this.settings.vaultId) {
 					new Notice(t("getVaultIdFailed"));
-					await this.writeToVerboseLogFile("FATAL ERROR: Couldn't get VaultID from Google Drive :(");
 				}
 				new Notice(t("checkConnectionReload"));
-				await this.writeToVerboseLogFile("LOG: adding settings UI");
 				this.addSettingTab(new SyncSettingsTab(this.app, this));
 				return;
 			}
 
 			if (this.settings.vaultId == "NOT FOUND") {
-				await this.writeToVerboseLogFile("LOG: vault not found");
 				this.settings.vaultInit = false;
 				new Notice(t("vaultNotFound", { name: this.app.vault.getName() }));
 				new Notice(t("initVaultHint"), 5000);
@@ -307,10 +212,8 @@ export default class DriveSyncPlugin extends Plugin {
 			}
 		} else {
 			new Notice(t("invalidToken"));
-			this.writeToErrorLogFile(new Error("ERROR: Invalid token"));
 		}
 
-		await this.writeToVerboseLogFile("LOG: adding settings UI");
 		this.addSettingTab(new SyncSettingsTab(this.app, this));
 	};
 
@@ -504,28 +407,6 @@ class SyncSettingsTab extends PluginSettingTab {
 			});
 			sync_link.href = this.plugin.settings.fetchRefreshTokenURL;
 		}
-
-		new Setting(containerEl)
-			.setName("Enable Error logging")
-			.setDesc("Error logs will appear in a .md file")
-			.addToggle((toggle) => {
-				toggle.setValue(this.plugin.settings.errorLoggingToFile);
-				toggle.onChange((val) => {
-					this.plugin.settings.errorLoggingToFile = val;
-					this.plugin.saveSettings();
-				});
-			});
-
-		new Setting(containerEl)
-			.setName("Enable Verbose logging")
-			.setDesc("Verbose logs will appear in a .md file")
-			.addToggle((toggle) => {
-				toggle.setValue(this.plugin.settings.verboseLoggingToFile);
-				toggle.onChange((val) => {
-					this.plugin.settings.verboseLoggingToFile = val;
-					this.plugin.saveSettings();
-				});
-			});
 
 		new Setting(containerEl)
 			.setName("Set refresh token")

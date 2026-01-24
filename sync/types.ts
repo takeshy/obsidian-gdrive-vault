@@ -69,8 +69,6 @@ export interface DriveSettings {
 	vaultInit: boolean;
 	filesList: DriveFileInfo[];
 	rootFolderId: string;
-	errorLoggingToFile: boolean;
-	verboseLoggingToFile: boolean;
 	excludePatterns: string[];
 	conflictFolder: string;
 }

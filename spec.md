@@ -163,14 +163,7 @@ Google Drive/
 
 `checkForConnectivity()`: 5秒間隔でgithub.comへfetchして接続確認。
 
-### ログ機能
-
-| ファイル | 設定 | 内容 |
-|---------|-----|------|
-| `error-log-gdrive-plugin.md` | `errorLoggingToFile` | エラー詳細 |
-| `verbose-log-gdrive-plugin.md` | `verboseLoggingToFile` | 全操作ログ |
-
-## 設定画面 (syncSettings クラス)
+## 設定画面 (SyncSettingsTab クラス)
 
 ### 設定項目
 
@@ -178,11 +171,8 @@ Google Drive/
 |-----|------|
 | Set refresh token | OAuthトークン設定 |
 | Initialize vault | 新規Vault初期化 |
-| Set refresh time | 同期間隔（秒） |
-| Auto refresh binary files | バイナリ自動同期 |
-| Blacklist paths | 除外パス（カンマ区切り） |
-| Force Focus Mode | 編集フォーカス維持 |
-| Enable Error/Verbose logging | ログ出力 |
+| Exclude patterns | 除外パターン（glob形式） |
+| Conflict folder | 競合ファイル保存先 |
 
 ## コマンド
 
