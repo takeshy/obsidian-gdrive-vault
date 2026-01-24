@@ -439,17 +439,11 @@ class SyncSettingsTab extends PluginSettingTab {
 					if (res != "error") {
 						this.plugin.settings.accessToken = res.access_token;
 						this.plugin.settings.validToken = true;
+						await this.plugin.saveSettings();
 						new Notice(t("loggedInSuccess"));
-						sync.innerHTML = "";
-						const sync_text = sync.createEl("div", {
-							text: t("loggedIn"),
-							cls: "sync_text",
-						});
-						const sync_icons = sync.createDiv({
-							cls: "sync_icon_still",
-						});
-						setIcon(sync_icons, "checkmark");
-						new Notice(t("reloadPlugin"), 5000);
+						// Re-render settings to show additional options
+						this.display();
+						return;
 					} else {
 						this.plugin.settings.accessToken = "";
 						this.plugin.settings.validToken = false;
