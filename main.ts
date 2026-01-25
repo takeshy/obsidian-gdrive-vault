@@ -17,7 +17,7 @@ import {
 	getVaultId,
 	uploadFolder,
 } from "./actions";
-import { DriveSettings, DEFAULT_CONFLICT_FOLDER, META_FILE_NAME_REMOTE } from "./sync/types";
+import { DriveSettings, DEFAULT_CONFLICT_FOLDER, META_FILE_NAME_REMOTE, TEMP_SYNC_PREFIX } from "./sync/types";
 import { SyncEngine } from "./sync/sync-engine";
 import { dialogStyles, ConfirmDialog, DeleteExcludedFilesDialog, UntrackedFilesDialog } from "./sync/dialogs";
 import { t } from "./sync/i18n";
@@ -322,6 +322,68 @@ export default class DriveSyncPlugin extends Plugin {
 				}
 				if (this.syncEngine) {
 					await this.syncEngine.pullAll();
+				}
+			},
+		});
+
+		this.addCommand({
+			id: "temp-upload-current-file",
+			name: "Temporary upload current file",
+			callback: async () => {
+				if (!this.connectedToInternet) {
+					new Notice(t("noInternetError"));
+					return;
+				}
+				if (!this.syncEngine) {
+					new Notice(t("syncEngineNotInit"));
+					return;
+				}
+
+				const activeFile = this.app.workspace.getActiveFile();
+				if (!activeFile) {
+					new Notice(t("noActiveFile"));
+					return;
+				}
+
+				try {
+					await this.syncEngine.tempUpload(activeFile.path);
+					new Notice(t("tempUploadComplete", { path: activeFile.path }));
+				} catch (err) {
+					console.error("Temporary upload failed:", err);
+					new Notice(t("tempUploadFailed"));
+				}
+			},
+		});
+
+		this.addCommand({
+			id: "temp-download-current-file",
+			name: "Temporary download to current file",
+			callback: async () => {
+				if (!this.connectedToInternet) {
+					new Notice(t("noInternetError"));
+					return;
+				}
+				if (!this.syncEngine) {
+					new Notice(t("syncEngineNotInit"));
+					return;
+				}
+
+				const activeFile = this.app.workspace.getActiveFile();
+				if (!activeFile) {
+					new Notice(t("noActiveFile"));
+					return;
+				}
+
+				try {
+					await this.syncEngine.tempDownload(activeFile.path);
+					new Notice(t("tempDownloadComplete", { path: activeFile.path }));
+				} catch (err: any) {
+					console.error("Temporary download failed:", err);
+					if (err.message?.includes("not found")) {
+						new Notice(t("tempFileNotFound", { path: activeFile.path }));
+					} else {
+						new Notice(t("tempDownloadFailed"));
+					}
 				}
 			},
 		});
@@ -703,6 +765,52 @@ class SyncSettingsTab extends PluginSettingTab {
 				button.onClick(async () => {
 					if (this.plugin.syncEngine) {
 						await this.plugin.syncEngine.pullAll();
+					}
+				});
+			});
+
+		containerEl.createEl("h3", { text: t("tempSyncTitle") });
+
+		new Setting(containerEl)
+			.setName(t("clearTempFiles"))
+			.setDesc(t("clearTempFilesDesc"))
+			.addButton((button) => {
+				button.setButtonText(t("clearTempFilesButton"));
+				button.setWarning();
+				button.onClick(async () => {
+					if (!this.plugin.syncEngine) {
+						new Notice(t("syncEngineNotInit"));
+						return;
+					}
+
+					button.setDisabled(true);
+					button.setButtonText(t("loading"));
+
+					try {
+						const tempFiles = await this.plugin.syncEngine.getTempFiles();
+						button.setButtonText(t("clearTempFilesButton"));
+						button.setDisabled(false);
+
+						if (tempFiles.length === 0) {
+							new Notice(t("noTempFiles"));
+							return;
+						}
+
+						new ConfirmDialog(
+							this.app,
+							t("confirmClearTempFiles", { count: tempFiles.length.toString() }),
+							async () => {
+								if (this.plugin.syncEngine) {
+									const deleted = await this.plugin.syncEngine.clearTempFiles();
+									new Notice(t("tempFilesCleared", { count: deleted.toString() }));
+								}
+							}
+						).open();
+					} catch (err) {
+						console.error("Failed to get temp files:", err);
+						new Notice(t("loadFailed"));
+						button.setButtonText(t("clearTempFilesButton"));
+						button.setDisabled(false);
 					}
 				});
 			});

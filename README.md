@@ -77,6 +77,30 @@ Ribbon buttons: Upload icon = Push, Download icon = Pull
 
 ---
 
+## Temporary Sync
+
+Quick file sharing without full sync overhead. Use when:
+- Push/Pull takes too long
+- You want to avoid conflict resolution
+- You need to quickly share a single file across devices
+
+| Command | Description |
+|---------|-------------|
+| **Temporary upload current file** | Upload active file to temp storage |
+| **Temporary download to current file** | Download temp version to active file |
+
+**Tip**: Assign hotkeys in Obsidian Settings → Hotkeys for quick access.
+
+**Clear temp files**: Settings → Temporary Sync → Clear All
+
+### How It Works
+
+- Files are stored with `__TEMP__/` prefix on Google Drive
+- **No metadata is updated** (neither local nor remote meta files)
+- Equivalent to making the same edit on both devices manually
+
+---
+
 ## How Sync Works
 
 ### Overview

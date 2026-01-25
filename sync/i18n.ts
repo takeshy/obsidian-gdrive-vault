@@ -157,6 +157,21 @@ const translations = {
 		untrackedFilesDeleted: 'Deleted {count} untracked file(s)',
 		untrackedFilesRestored: 'Restored {count} untracked file(s)',
 		restoring: 'Restoring...',
+
+		// Temporary Sync
+		tempSyncTitle: 'Temporary Sync',
+		noActiveFile: 'No active file',
+		tempUploadComplete: 'Temporary upload complete: {path}',
+		tempUploadFailed: 'Temporary upload failed',
+		tempDownloadComplete: 'Temporary download complete: {path}',
+		tempDownloadFailed: 'Temporary download failed',
+		tempFileNotFound: 'Temporary file not found: {path}',
+		clearTempFiles: 'Clear temporary files',
+		clearTempFilesDesc: 'Delete all temporary sync files from Google Drive',
+		clearTempFilesButton: 'Clear All',
+		confirmClearTempFiles: 'Delete {count} temporary file(s)?',
+		noTempFiles: 'No temporary files',
+		tempFilesCleared: 'Deleted {count} temporary file(s)',
 	},
 	ja: {
 		// Common
@@ -310,6 +325,21 @@ const translations = {
 		untrackedFilesDeleted: '{count}個の未追跡ファイルを削除しました',
 		untrackedFilesRestored: '{count}個の未追跡ファイルを復元しました',
 		restoring: '復元中...',
+
+		// Temporary Sync
+		tempSyncTitle: '一時同期',
+		noActiveFile: 'アクティブなファイルがありません',
+		tempUploadComplete: '一時アップロード完了: {path}',
+		tempUploadFailed: '一時アップロードに失敗しました',
+		tempDownloadComplete: '一時ダウンロード完了: {path}',
+		tempDownloadFailed: '一時ダウンロードに失敗しました',
+		tempFileNotFound: '一時ファイルが見つかりません: {path}',
+		clearTempFiles: '一時ファイルを削除',
+		clearTempFilesDesc: 'Google Driveからすべての一時同期ファイルを削除',
+		clearTempFilesButton: 'すべて削除',
+		confirmClearTempFiles: '{count}個の一時ファイルを削除しますか？',
+		noTempFiles: '一時ファイルはありません',
+		tempFilesCleared: '{count}個の一時ファイルを削除しました',
 	},
 };
 

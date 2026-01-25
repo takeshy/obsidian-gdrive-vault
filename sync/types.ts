@@ -78,3 +78,6 @@ export interface DriveSettings {
 /** Constants for file paths */
 export const META_FILE_NAME_LOCAL = '.obsidian/gdrive-vault-meta.json';
 export const META_FILE_NAME_REMOTE = '_gdrive-vault-meta.json';
+
+/** Prefix for temporary sync files */
+export const TEMP_SYNC_PREFIX = '__TEMP__/';
