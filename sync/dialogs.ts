@@ -2,7 +2,7 @@
  * Dialog components for sync operations
  */
 
-import { App, Modal, Setting } from 'obsidian';
+import { App, Modal, Setting, ButtonComponent } from 'obsidian';
 import { ConflictInfo, ConflictResolution, ConflictResolutions, DEFAULT_CONFLICT_FOLDER } from './types';
 import { t } from './i18n';
 
@@ -907,8 +907,8 @@ export class UntrackedFilesDialog extends Modal {
 	private selectedFiles: Set<string> = new Set();
 	private checkboxes: Map<string, HTMLInputElement> = new Map();
 	private selectAllCheckbox: HTMLInputElement | null = null;
-	private deleteButton: HTMLButtonElement | null = null;
-	private restoreButton: HTMLButtonElement | null = null;
+	private deleteButtonComponent: ButtonComponent | null = null;
+	private restoreButtonComponent: ButtonComponent | null = null;
 
 	constructor(
 		app: App,
@@ -992,7 +992,7 @@ export class UntrackedFilesDialog extends Modal {
 
 		// Restore button
 		buttonContainer.addButton(btn => {
-			this.restoreButton = btn.buttonEl;
+			this.restoreButtonComponent = btn;
 			btn
 				.setButtonText(t('restoreSelected', { count: '0' }))
 				.setCta()
@@ -1017,7 +1017,7 @@ export class UntrackedFilesDialog extends Modal {
 
 		// Delete button
 		buttonContainer.addButton(btn => {
-			this.deleteButton = btn.buttonEl;
+			this.deleteButtonComponent = btn;
 			btn
 				.setButtonText(t('deleteSelected', { count: '0' }))
 				.setWarning()
@@ -1056,19 +1056,19 @@ export class UntrackedFilesDialog extends Modal {
 
 	private updateButtons() {
 		const count = this.selectedFiles.size;
-		if (this.deleteButton) {
-			this.deleteButton.textContent = t('deleteSelected', { count: count.toString() });
-			this.deleteButton.disabled = count === 0;
+		if (this.deleteButtonComponent) {
+			this.deleteButtonComponent.setButtonText(t('deleteSelected', { count: count.toString() }));
+			this.deleteButtonComponent.setDisabled(count === 0);
 		}
-		if (this.restoreButton) {
-			this.restoreButton.textContent = t('restoreSelected', { count: count.toString() });
-			this.restoreButton.disabled = count === 0;
+		if (this.restoreButtonComponent) {
+			this.restoreButtonComponent.setButtonText(t('restoreSelected', { count: count.toString() }));
+			this.restoreButtonComponent.setDisabled(count === 0);
 		}
 	}
 
 	private setButtonsDisabled(disabled: boolean) {
-		if (this.deleteButton) this.deleteButton.disabled = disabled;
-		if (this.restoreButton) this.restoreButton.disabled = disabled;
+		if (this.deleteButtonComponent) this.deleteButtonComponent.setDisabled(disabled);
+		if (this.restoreButtonComponent) this.restoreButtonComponent.setDisabled(disabled);
 	}
 
 	onClose() {
