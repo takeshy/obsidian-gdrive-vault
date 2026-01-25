@@ -1,11 +1,13 @@
 import {
 	App,
+	Menu,
 	Notice,
 	Plugin,
 	PluginSettingTab,
 	setIcon,
 	Setting,
 	FileSystemAdapter,
+	TFile,
 	TFolder,
 } from "obsidian";
 
@@ -387,6 +389,65 @@ export default class DriveSyncPlugin extends Plugin {
 				}
 			},
 		});
+
+		// Context menu for temporary upload/download
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu: Menu, file) => {
+				if (!(file instanceof TFile)) return;
+
+				menu.addItem((item) => {
+					item
+						.setTitle(t("tempUploadContextMenu"))
+						.setIcon("upload")
+						.onClick(async () => {
+							if (!this.connectedToInternet) {
+								new Notice(t("noInternetError"));
+								return;
+							}
+							if (!this.syncEngine) {
+								new Notice(t("syncEngineNotInit"));
+								return;
+							}
+
+							try {
+								await this.syncEngine.tempUpload(file.path);
+								new Notice(t("tempUploadComplete", { path: file.path }));
+							} catch (err) {
+								console.error("Temporary upload failed:", err);
+								new Notice(t("tempUploadFailed"));
+							}
+						});
+				});
+
+				menu.addItem((item) => {
+					item
+						.setTitle(t("tempDownloadContextMenu"))
+						.setIcon("download")
+						.onClick(async () => {
+							if (!this.connectedToInternet) {
+								new Notice(t("noInternetError"));
+								return;
+							}
+							if (!this.syncEngine) {
+								new Notice(t("syncEngineNotInit"));
+								return;
+							}
+
+							try {
+								await this.syncEngine.tempDownload(file.path);
+								new Notice(t("tempDownloadComplete", { path: file.path }));
+							} catch (err: any) {
+								console.error("Temporary download failed:", err);
+								if (err.message?.includes("not found")) {
+									new Notice(t("tempFileNotFound", { path: file.path }));
+								} else {
+									new Notice(t("tempDownloadFailed"));
+								}
+							}
+						});
+				});
+			})
+		);
 	}
 
 	onunload() {

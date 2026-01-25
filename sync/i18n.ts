@@ -175,6 +175,8 @@ const translations = {
 		tempFilesDeleted: 'Deleted {count} temporary file(s)',
 		tempFilesDownloaded: 'Downloaded {count} temporary file(s)',
 		downloadingTempFiles: 'Downloading...',
+		tempUploadContextMenu: 'Temporary upload to Google Drive',
+		tempDownloadContextMenu: 'Temporary download from Google Drive',
 	},
 	ja: {
 		// Common
@@ -346,6 +348,8 @@ const translations = {
 		tempFilesDeleted: '{count}個の一時ファイルを削除しました',
 		tempFilesDownloaded: '{count}個の一時ファイルをダウンロードしました',
 		downloadingTempFiles: 'ダウンロード中...',
+		tempUploadContextMenu: '一時ファイルとしてGoogle Driveにアップロード',
+		tempDownloadContextMenu: '一時ファイルをGoogle Driveからダウンロード',
 	},
 };
 
