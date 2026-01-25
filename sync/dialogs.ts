@@ -1078,6 +1078,195 @@ export class UntrackedFilesDialog extends Modal {
 }
 
 /**
+ * Info for temp files
+ */
+export interface TempFileInfo {
+	id: string;
+	name: string;       // Full name with __TEMP__/ prefix
+	displayName: string; // Name without prefix (original path)
+}
+
+/**
+ * Dialog for selecting, downloading, or deleting temporary files
+ */
+export class TempFilesDialog extends Modal {
+	private files: TempFileInfo[];
+	private onDelete: (fileIds: string[]) => Promise<void>;
+	private onDownload: (fileIds: string[]) => Promise<void>;
+	private selectedFiles: Set<string> = new Set();
+	private checkboxes: Map<string, HTMLInputElement> = new Map();
+	private selectAllCheckbox: HTMLInputElement | null = null;
+	private deleteButtonComponent: ButtonComponent | null = null;
+	private downloadButtonComponent: ButtonComponent | null = null;
+
+	constructor(
+		app: App,
+		files: TempFileInfo[],
+		onDelete: (fileIds: string[]) => Promise<void>,
+		onDownload: (fileIds: string[]) => Promise<void>
+	) {
+		super(app);
+		this.files = files;
+		this.onDelete = onDelete;
+		this.onDownload = onDownload;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+
+		contentEl.createEl('h2', { text: t('tempFilesDialogTitle') });
+		contentEl.createEl('p', {
+			text: t('tempFilesDialogDesc'),
+			cls: 'untracked-dialog-description',
+		});
+
+		if (this.files.length === 0) {
+			contentEl.createEl('p', {
+				text: t('noTempFiles'),
+				cls: 'untracked-no-files',
+			});
+			new Setting(contentEl)
+				.addButton(btn =>
+					btn
+						.setButtonText(t('ok'))
+						.setCta()
+						.onClick(() => this.close())
+				);
+			return;
+		}
+
+		// Select all checkbox
+		const selectAllContainer = contentEl.createDiv({ cls: 'untracked-select-all' });
+		const selectAllLabel = selectAllContainer.createEl('label', { cls: 'untracked-checkbox-label' });
+		this.selectAllCheckbox = selectAllLabel.createEl('input', { type: 'checkbox' });
+		selectAllLabel.createSpan({ text: t('selectAll') });
+
+		this.selectAllCheckbox.addEventListener('change', () => {
+			const checked = this.selectAllCheckbox!.checked;
+			for (const [fileId, checkbox] of this.checkboxes) {
+				checkbox.checked = checked;
+				if (checked) {
+					this.selectedFiles.add(fileId);
+				} else {
+					this.selectedFiles.delete(fileId);
+				}
+			}
+			this.updateButtons();
+		});
+
+		// File list with checkboxes
+		const fileListContainer = contentEl.createDiv({ cls: 'untracked-file-list' });
+
+		for (const file of this.files) {
+			const fileEl = fileListContainer.createDiv({ cls: 'untracked-file-item' });
+			const label = fileEl.createEl('label', { cls: 'untracked-checkbox-label' });
+			const checkbox = label.createEl('input', { type: 'checkbox' });
+			label.createSpan({ text: file.displayName, cls: 'untracked-file-name' });
+
+			this.checkboxes.set(file.id, checkbox);
+
+			checkbox.addEventListener('change', () => {
+				if (checkbox.checked) {
+					this.selectedFiles.add(file.id);
+				} else {
+					this.selectedFiles.delete(file.id);
+				}
+				this.updateSelectAllCheckbox();
+				this.updateButtons();
+			});
+		}
+
+		// Buttons
+		const buttonContainer = new Setting(contentEl);
+
+		// Download button
+		buttonContainer.addButton(btn => {
+			this.downloadButtonComponent = btn;
+			btn
+				.setButtonText(t('downloadSelected', { count: '0' }))
+				.setCta()
+				.setDisabled(true)
+				.onClick(async () => {
+					if (this.selectedFiles.size === 0) return;
+
+					const fileIds = Array.from(this.selectedFiles);
+					this.setButtonsDisabled(true);
+					btn.setButtonText(t('downloadingTempFiles'));
+
+					try {
+						await this.onDownload(fileIds);
+						this.close();
+					} catch (err) {
+						console.error('Failed to download temp files:', err);
+						btn.setButtonText(t('downloadSelected', { count: fileIds.length.toString() }));
+						this.setButtonsDisabled(false);
+					}
+				});
+		});
+
+		// Delete button
+		buttonContainer.addButton(btn => {
+			this.deleteButtonComponent = btn;
+			btn
+				.setButtonText(t('deleteSelected', { count: '0' }))
+				.setWarning()
+				.setDisabled(true)
+				.onClick(async () => {
+					if (this.selectedFiles.size === 0) return;
+
+					const fileIds = Array.from(this.selectedFiles);
+					this.setButtonsDisabled(true);
+					btn.setButtonText(t('deleting'));
+
+					try {
+						await this.onDelete(fileIds);
+						this.close();
+					} catch (err) {
+						console.error('Failed to delete temp files:', err);
+						btn.setButtonText(t('deleteSelected', { count: fileIds.length.toString() }));
+						this.setButtonsDisabled(false);
+					}
+				});
+		});
+
+		buttonContainer.addButton(btn =>
+			btn
+				.setButtonText(t('cancel'))
+				.onClick(() => this.close())
+		);
+	}
+
+	private updateSelectAllCheckbox() {
+		if (!this.selectAllCheckbox) return;
+		this.selectAllCheckbox.checked = this.selectedFiles.size === this.files.length;
+		this.selectAllCheckbox.indeterminate =
+			this.selectedFiles.size > 0 && this.selectedFiles.size < this.files.length;
+	}
+
+	private updateButtons() {
+		const count = this.selectedFiles.size;
+		if (this.deleteButtonComponent) {
+			this.deleteButtonComponent.setButtonText(t('deleteSelected', { count: count.toString() }));
+			this.deleteButtonComponent.setDisabled(count === 0);
+		}
+		if (this.downloadButtonComponent) {
+			this.downloadButtonComponent.setButtonText(t('downloadSelected', { count: count.toString() }));
+			this.downloadButtonComponent.setDisabled(count === 0);
+		}
+	}
+
+	private setButtonsDisabled(disabled: boolean) {
+		if (this.deleteButtonComponent) this.deleteButtonComponent.setDisabled(disabled);
+		if (this.downloadButtonComponent) this.downloadButtonComponent.setDisabled(disabled);
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+/**
  * CSS styles for dialogs (to be added to styles.css)
  */
 export const dialogStyles = `

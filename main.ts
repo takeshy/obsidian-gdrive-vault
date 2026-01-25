@@ -19,7 +19,7 @@ import {
 } from "./actions";
 import { DriveSettings, DEFAULT_CONFLICT_FOLDER, META_FILE_NAME_REMOTE, TEMP_SYNC_PREFIX } from "./sync/types";
 import { SyncEngine } from "./sync/sync-engine";
-import { dialogStyles, ConfirmDialog, DeleteExcludedFilesDialog, UntrackedFilesDialog } from "./sync/dialogs";
+import { dialogStyles, ConfirmDialog, DeleteExcludedFilesDialog, UntrackedFilesDialog, TempFilesDialog } from "./sync/dialogs";
 import { t } from "./sync/i18n";
 import { readLocalMeta, shouldExclude, readRemoteMeta, writeRemoteMeta } from "./sync/meta";
 import { OAUTH_CONFIG } from "./config";
@@ -772,11 +772,10 @@ class SyncSettingsTab extends PluginSettingTab {
 		containerEl.createEl("h3", { text: t("tempSyncTitle") });
 
 		new Setting(containerEl)
-			.setName(t("clearTempFiles"))
-			.setDesc(t("clearTempFilesDesc"))
+			.setName(t("tempFilesButton"))
+			.setDesc(t("tempFilesButtonDesc"))
 			.addButton((button) => {
-				button.setButtonText(t("clearTempFilesButton"));
-				button.setWarning();
+				button.setButtonText(t("tempFilesButton"));
 				button.onClick(async () => {
 					if (!this.plugin.syncEngine) {
 						new Notice(t("syncEngineNotInit"));
@@ -788,28 +787,36 @@ class SyncSettingsTab extends PluginSettingTab {
 
 					try {
 						const tempFiles = await this.plugin.syncEngine.getTempFiles();
-						button.setButtonText(t("clearTempFilesButton"));
+						button.setButtonText(t("tempFilesButton"));
 						button.setDisabled(false);
 
-						if (tempFiles.length === 0) {
-							new Notice(t("noTempFiles"));
-							return;
-						}
+						// Convert to TempFileInfo format
+						const tempFileInfos = tempFiles.map(f => ({
+							id: f.id,
+							name: f.name,
+							displayName: f.name.replace(TEMP_SYNC_PREFIX, ''),
+						}));
 
-						new ConfirmDialog(
+						new TempFilesDialog(
 							this.app,
-							t("confirmClearTempFiles", { count: tempFiles.length.toString() }),
-							async () => {
+							tempFileInfos,
+							async (fileIds: string[]) => {
 								if (this.plugin.syncEngine) {
-									const deleted = await this.plugin.syncEngine.clearTempFiles();
-									new Notice(t("tempFilesCleared", { count: deleted.toString() }));
+									const deleted = await this.plugin.syncEngine.deleteTempFiles(fileIds);
+									new Notice(t("tempFilesDeleted", { count: deleted.toString() }));
+								}
+							},
+							async (fileIds: string[]) => {
+								if (this.plugin.syncEngine) {
+									const downloaded = await this.plugin.syncEngine.downloadTempFiles(fileIds);
+									new Notice(t("tempFilesDownloaded", { count: downloaded.toString() }));
 								}
 							}
 						).open();
 					} catch (err) {
 						console.error("Failed to get temp files:", err);
 						new Notice(t("loadFailed"));
-						button.setButtonText(t("clearTempFilesButton"));
+						button.setButtonText(t("tempFilesButton"));
 						button.setDisabled(false);
 					}
 				});
