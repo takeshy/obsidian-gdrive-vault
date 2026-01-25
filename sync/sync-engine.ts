@@ -508,7 +508,7 @@ export class SyncEngine {
 						this.app,
 						conflicts,
 						async (resolutions) => {
-							await this.performPull(remoteMeta, filesList, resolutions);
+							await this.performPull(remoteMeta, filesList, resolutions, currentLocalMeta);
 						},
 						() => {
 							new Notice(t('pullCancelled'));
@@ -519,7 +519,7 @@ export class SyncEngine {
 				}
 
 				// No conflicts - just pull
-				await this.performPull(remoteMeta, filesList, {});
+				await this.performPull(remoteMeta, filesList, {}, currentLocalMeta);
 				return;
 			}
 
@@ -583,7 +583,7 @@ export class SyncEngine {
 					this.app,
 					allConflicts,
 					async (resolutions) => {
-						await this.performPull(remoteMeta, filesList, resolutions);
+						await this.performPull(remoteMeta, filesList, resolutions, currentLocalMeta);
 					},
 					() => {
 						new Notice(t('pullCancelled'));
@@ -599,7 +599,7 @@ export class SyncEngine {
 				return;
 			}
 
-			await this.performPull(remoteMeta, filesList, {});
+			await this.performPull(remoteMeta, filesList, {}, currentLocalMeta);
 
 		} catch (err) {
 			console.error('Pull failed:', err);
@@ -610,11 +610,13 @@ export class SyncEngine {
 	private async performPull(
 		remoteMeta: SyncMeta,
 		filesList: DriveFileInfo[],
-		resolutions: ConflictResolutions
+		resolutions: ConflictResolutions,
+		currentLocalMeta?: SyncMeta
 	): Promise<void> {
 		this.refreshSettings();
 		const localMeta = await readLocalMeta(this.vault);
-		const currentLocalMeta = await buildMetaFromVault(this.vault, this.settings.excludePatterns);
+		// Use provided currentLocalMeta or build it (for backward compatibility)
+		const actualLocalMeta = currentLocalMeta || await buildMetaFromVault(this.vault, this.settings.excludePatterns);
 
 		const progress = new SyncProgressDialog(this.app, 'Pulling Changes...');
 		progress.open();
@@ -629,7 +631,7 @@ export class SyncEngine {
 				if (shouldExclude(path, this.settings.excludePatterns)) continue;
 
 				const localMetaInfo = localMeta?.files[path];
-				const actualLocalInfo = currentLocalMeta.files[path];
+				const actualLocalInfo = actualLocalMeta.files[path];
 				const resolution = resolutions[path];
 
 				if (!actualLocalInfo) {
@@ -703,7 +705,6 @@ export class SyncEngine {
 			const modifiedDeletes: ModifiedDeleteInfo[] = [];
 			const keptLocalFiles: string[] = []; // Files kept due to A | - | B conflict resolution
 			if (localMeta) {
-				const lastUpdatedTime = new Date(localMeta.lastUpdatedAt).getTime();
 				for (const path of Object.keys(localMeta.files)) {
 					if (!remoteMeta.files[path] && !shouldExclude(path, this.settings.excludePatterns)) {
 						const file = this.vault.getAbstractFileByPath(path);
@@ -711,8 +712,10 @@ export class SyncEngine {
 							// Check for A | - | B conflict resolution
 							const resolution = resolutions[path];
 
-							// Check if file was modified after lastUpdatedAt
-							const isModified = file.stat.mtime > lastUpdatedTime;
+							// Check if file was modified after last sync (using hash comparison for consistency)
+							const actualInfo = actualLocalMeta.files[path];
+							const localMetaInfo = localMeta.files[path];
+							const isModified = actualInfo && localMetaInfo && actualInfo.hash !== localMetaInfo.hash;
 
 							if (isModified && resolution === 'local') {
 								// User chose to keep local - don't delete, will be uploaded on next Push
@@ -725,7 +728,7 @@ export class SyncEngine {
 								// Save to backup folder just in case
 								modifiedDeletes.push({
 									path,
-									modifiedTime: new Date(file.stat.mtime).toISOString(),
+									modifiedTime: actualInfo?.modifiedTime || new Date(file.stat.mtime).toISOString(),
 								});
 							}
 
@@ -776,17 +779,32 @@ export class SyncEngine {
 			});
 
 			// Save modified files to conflict folder before deleting
+			// Track successful backups to ensure we don't delete without backup
+			const successfulBackups = new Set<string>();
 			for (const info of modifiedDeletes) {
 				const file = this.vault.getAbstractFileByPath(info.path);
 				if (file instanceof TFile) {
 					const buffer = await this.vault.readBinary(file);
 					const conflictPath = generateConflictFilename(info.path, this.settings.conflictFolder);
-					await this.createFileWithPath(conflictPath, buffer);
+					try {
+						await this.createFileWithPath(conflictPath, buffer);
+						successfulBackups.add(info.path);
+					} catch (err) {
+						console.error(`Failed to backup file before deletion: ${info.path}`, err);
+						// Don't add to successfulBackups - file won't be deleted
+					}
 				}
 			}
 
 			// Delete local files (sequential to avoid conflicts)
 			for (const path of toDelete) {
+				// Skip deletion if backup was required but failed
+				const needsBackup = modifiedDeletes.some(d => d.path === path);
+				if (needsBackup && !successfulBackups.has(path)) {
+					console.warn(`Skipping deletion of ${path}: backup failed`);
+					continue;
+				}
+
 				const file = this.vault.getAbstractFileByPath(path);
 				if (file instanceof TFile) {
 					await this.vault.trash(file, false);
