@@ -12,6 +12,7 @@ import {
 	DriveSettings,
 	META_FILE_NAME_LOCAL,
 	META_FILE_NAME_REMOTE,
+	TEMP_SYNC_PREFIX,
 } from './types';
 import { calculateHash } from './hash';
 import {
@@ -1254,5 +1255,85 @@ export class SyncEngine {
 		}
 
 		return restored;
+	}
+
+	/**
+	 * Upload a file to temporary storage (no meta update)
+	 */
+	async tempUpload(filePath: string): Promise<void> {
+		this.refreshSettings();
+
+		const file = this.vault.getAbstractFileByPath(filePath);
+		if (!(file instanceof TFile)) {
+			throw new Error(`File not found: ${filePath}`);
+		}
+
+		const buffer = await this.vault.readBinary(file);
+		const tempFileName = TEMP_SYNC_PREFIX + filePath;
+
+		// Check if temp file already exists
+		const filesList = await this.refreshFilesList();
+		const existingFile = filesList.find(f => f.name === tempFileName);
+
+		if (existingFile) {
+			// Update existing temp file
+			await modifyFile(this.settings.accessToken, existingFile.id, buffer);
+		} else {
+			// Upload new temp file
+			await uploadFile(
+				this.settings.accessToken,
+				tempFileName,
+				buffer,
+				this.settings.vaultId
+			);
+		}
+	}
+
+	/**
+	 * Download a file from temporary storage (no meta update)
+	 */
+	async tempDownload(filePath: string): Promise<void> {
+		this.refreshSettings();
+
+		const tempFileName = TEMP_SYNC_PREFIX + filePath;
+		const filesList = await this.refreshFilesList();
+		const driveFile = filesList.find(f => f.name === tempFileName);
+
+		if (!driveFile) {
+			throw new Error(`Temp file not found: ${tempFileName}`);
+		}
+
+		const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
+		await this.createFileWithPath(filePath, buffer);
+	}
+
+	/**
+	 * Get list of temporary files on Google Drive
+	 */
+	async getTempFiles(): Promise<DriveFileInfo[]> {
+		this.refreshSettings();
+		const filesList = await this.refreshFilesList();
+
+		return filesList.filter(f => f.name.startsWith(TEMP_SYNC_PREFIX));
+	}
+
+	/**
+	 * Delete all temporary files from Google Drive
+	 */
+	async clearTempFiles(): Promise<number> {
+		this.refreshSettings();
+		const tempFiles = await this.getTempFiles();
+		let deleted = 0;
+
+		for (const file of tempFiles) {
+			try {
+				await deleteFile(this.settings.accessToken, file.id);
+				deleted++;
+			} catch (err) {
+				console.error(`Failed to delete temp file: ${file.name}`, err);
+			}
+		}
+
+		return deleted;
 	}
 }
