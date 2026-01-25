@@ -282,27 +282,30 @@ The unselected version is always backed up for manual merging if needed.
 
 ## File Recovery
 
-### Scenario 1: Accidentally Deleted File
+### Scenario 1: Conflict - Need Both Versions
 
-1. Delete file locally
-2. Push changes → File removed from metadata
-3. **File stays on Google Drive as "untracked"**
+When a conflict occurs, you choose "Keep Local" or "Keep Remote", but the other version is always saved to `sync_conflicts/`.
 
-**To recover:** Settings → Detect Untracked Files → Select file → Restore Selected
+**To merge manually:**
+1. Open the file you kept
+2. Browse `sync_conflicts/` folder to find the other version
+3. Copy the parts you need from the backup
+4. Delete the backup file when done
 
-### Scenario 2: Accidentally Overwrote with Full Push
+### Scenario 2: Realize Later You Need a Deleted File
 
-1. Full Push with different local version
-2. **Old remote file renamed with timestamp (untracked)**
+When you delete a file locally and Push, the file stays on Google Drive as "untracked".
 
-**To recover:** Settings → Detect Untracked Files → Select old version → Restore Selected
+**To recover:**
+1. Settings → Detect Untracked Files
+2. Select the file you need
+3. Click "Restore Selected"
 
-### Scenario 3: Accidentally Overwrote with Full Pull
+### Scenario 3: Accidentally Modified or Deleted Locally
 
-1. Full Pull with different remote version
-2. **Old local file saved to `sync_conflicts/`**
+If you accidentally changed or deleted files locally and want to restore from remote.
 
-**To recover:** Browse `sync_conflicts/` folder and copy file back
+**To recover:** Use **Full Pull** - this treats remote as authoritative and downloads files that differ. Local files that differ are backed up to `sync_conflicts/`, so you can restore any files you didn't want overwritten.
 
 ---
 

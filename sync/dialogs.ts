@@ -97,6 +97,19 @@ export class ConflictDialog extends Modal {
 	private conflictFolder: string;
 	private diffStates: Map<string, boolean> = new Map();
 
+	// Drag state
+	private isDragging = false;
+	private dragStartX = 0;
+	private dragStartY = 0;
+	private modalStartX = 0;
+	private modalStartY = 0;
+
+	// Resize state
+	private isResizing = false;
+	private resizeDirection = '';
+	private resizeStartWidth = 0;
+	private resizeStartHeight = 0;
+
 	constructor(
 		app: App,
 		conflicts: ConflictInfoWithContent[],
@@ -118,9 +131,18 @@ export class ConflictDialog extends Modal {
 	}
 
 	onOpen() {
-		const { contentEl } = this;
+		const { contentEl, modalEl } = this;
 
-		contentEl.createEl('h2', { text: t('conflictTitle') });
+		// Add resizable class to modal
+		modalEl.addClass('gdrive-sync-modal-resizable');
+
+		// Add resize handles
+		this.addResizeHandles(modalEl);
+
+		// Create drag handle (title bar)
+		const dragHandle = contentEl.createDiv({ cls: 'modal-drag-handle' });
+		dragHandle.createEl('h2', { text: t('conflictTitle') });
+		this.setupDragHandle(dragHandle, modalEl);
 		contentEl.createEl('p', {
 			text: t('conflictDescription'),
 			cls: 'conflict-dialog-description',
@@ -292,6 +314,131 @@ export class ConflictDialog extends Modal {
 	private addDiffLine(container: HTMLElement, content: string, type: 'unchanged' | 'removed' | 'added' | 'placeholder') {
 		const lineEl = container.createDiv({ cls: `conflict-diff-line conflict-diff-${type}` });
 		lineEl.textContent = content || '\u00A0'; // Use non-breaking space for empty lines
+	}
+
+	private setupDragHandle(dragHandle: HTMLElement, modalEl: HTMLElement): void {
+		const onMouseDown = (e: MouseEvent) => {
+			this.isDragging = true;
+			this.dragStartX = e.clientX;
+			this.dragStartY = e.clientY;
+			const rect = modalEl.getBoundingClientRect();
+			this.modalStartX = rect.left;
+			this.modalStartY = rect.top;
+
+			modalEl.setCssStyles({
+				position: 'fixed',
+				left: `${rect.left}px`,
+				top: `${rect.top}px`,
+				transform: 'none',
+				margin: '0',
+			});
+
+			document.addEventListener('mousemove', onMouseMove);
+			document.addEventListener('mouseup', onMouseUp);
+			e.preventDefault();
+		};
+
+		const onMouseMove = (e: MouseEvent) => {
+			if (!this.isDragging) return;
+			const deltaX = e.clientX - this.dragStartX;
+			const deltaY = e.clientY - this.dragStartY;
+			modalEl.setCssStyles({
+				left: `${this.modalStartX + deltaX}px`,
+				top: `${this.modalStartY + deltaY}px`,
+			});
+		};
+
+		const onMouseUp = () => {
+			this.isDragging = false;
+			document.removeEventListener('mousemove', onMouseMove);
+			document.removeEventListener('mouseup', onMouseUp);
+		};
+
+		dragHandle.addEventListener('mousedown', onMouseDown);
+	}
+
+	private addResizeHandles(modalEl: HTMLElement): void {
+		const directions = ['n', 'e', 's', 'w', 'ne', 'nw', 'se', 'sw'];
+		for (const dir of directions) {
+			const handle = document.createElement('div');
+			handle.className = `gdrive-sync-resize-handle gdrive-sync-resize-${dir}`;
+			handle.dataset.direction = dir;
+			modalEl.appendChild(handle);
+			this.setupResize(handle, modalEl, dir);
+		}
+	}
+
+	private setupResize(handle: HTMLElement, modalEl: HTMLElement, direction: string): void {
+		const onMouseDown = (e: MouseEvent) => {
+			this.isResizing = true;
+			this.resizeDirection = direction;
+			this.dragStartX = e.clientX;
+			this.dragStartY = e.clientY;
+
+			const rect = modalEl.getBoundingClientRect();
+			this.resizeStartWidth = rect.width;
+			this.resizeStartHeight = rect.height;
+			this.modalStartX = rect.left;
+			this.modalStartY = rect.top;
+
+			modalEl.setCssStyles({
+				position: 'fixed',
+				margin: '0',
+				transform: 'none',
+				left: `${rect.left}px`,
+				top: `${rect.top}px`,
+				width: `${rect.width}px`,
+				height: `${rect.height}px`,
+			});
+
+			document.addEventListener('mousemove', onMouseMove);
+			document.addEventListener('mouseup', onMouseUp);
+			e.preventDefault();
+			e.stopPropagation();
+		};
+
+		const onMouseMove = (e: MouseEvent) => {
+			if (!this.isResizing) return;
+
+			const deltaX = e.clientX - this.dragStartX;
+			const deltaY = e.clientY - this.dragStartY;
+			const dir = this.resizeDirection;
+
+			let newWidth = this.resizeStartWidth;
+			let newHeight = this.resizeStartHeight;
+			let newLeft = this.modalStartX;
+			let newTop = this.modalStartY;
+
+			if (dir.includes('e')) {
+				newWidth = Math.max(400, this.resizeStartWidth + deltaX);
+			}
+			if (dir.includes('w')) {
+				newWidth = Math.max(400, this.resizeStartWidth - deltaX);
+				newLeft = this.modalStartX + (this.resizeStartWidth - newWidth);
+			}
+			if (dir.includes('s')) {
+				newHeight = Math.max(300, this.resizeStartHeight + deltaY);
+			}
+			if (dir.includes('n')) {
+				newHeight = Math.max(300, this.resizeStartHeight - deltaY);
+				newTop = this.modalStartY + (this.resizeStartHeight - newHeight);
+			}
+
+			modalEl.setCssStyles({
+				width: `${newWidth}px`,
+				height: `${newHeight}px`,
+				left: `${newLeft}px`,
+				top: `${newTop}px`,
+			});
+		};
+
+		const onMouseUp = () => {
+			this.isResizing = false;
+			document.removeEventListener('mousemove', onMouseMove);
+			document.removeEventListener('mouseup', onMouseUp);
+		};
+
+		handle.addEventListener('mousedown', onMouseDown);
 	}
 
 	onClose() {
@@ -934,6 +1081,110 @@ export class UntrackedFilesDialog extends Modal {
  * CSS styles for dialogs (to be added to styles.css)
  */
 export const dialogStyles = `
+/* Resizable modal container */
+.gdrive-sync-modal-resizable.modal {
+	width: 80vw;
+	max-width: 1000px;
+	height: 80vh;
+	max-height: 90vh;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.gdrive-sync-modal-resizable .modal-content {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	min-height: 0;
+}
+
+/* Drag handle (title bar) */
+.gdrive-sync-modal-resizable .modal-drag-handle {
+	cursor: move;
+	padding: 12px 16px;
+	margin: -16px -16px 16px -16px;
+	background: var(--background-secondary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	user-select: none;
+	flex-shrink: 0;
+}
+
+.gdrive-sync-modal-resizable .modal-drag-handle h2 {
+	margin: 0;
+}
+
+/* Resize handles */
+.gdrive-sync-resize-handle {
+	position: absolute;
+	z-index: 100;
+}
+
+.gdrive-sync-resize-n {
+	top: -4px;
+	left: 10px;
+	right: 10px;
+	height: 8px;
+	cursor: n-resize;
+}
+
+.gdrive-sync-resize-s {
+	bottom: -4px;
+	left: 10px;
+	right: 10px;
+	height: 8px;
+	cursor: s-resize;
+}
+
+.gdrive-sync-resize-e {
+	top: 10px;
+	right: -4px;
+	bottom: 10px;
+	width: 8px;
+	cursor: e-resize;
+}
+
+.gdrive-sync-resize-w {
+	top: 10px;
+	left: -4px;
+	bottom: 10px;
+	width: 8px;
+	cursor: w-resize;
+}
+
+.gdrive-sync-resize-ne {
+	top: -4px;
+	right: -4px;
+	width: 14px;
+	height: 14px;
+	cursor: ne-resize;
+}
+
+.gdrive-sync-resize-nw {
+	top: -4px;
+	left: -4px;
+	width: 14px;
+	height: 14px;
+	cursor: nw-resize;
+}
+
+.gdrive-sync-resize-se {
+	bottom: -4px;
+	right: -4px;
+	width: 14px;
+	height: 14px;
+	cursor: se-resize;
+}
+
+.gdrive-sync-resize-sw {
+	bottom: -4px;
+	left: -4px;
+	width: 14px;
+	height: 14px;
+	cursor: sw-resize;
+}
+
 .conflict-dialog-description {
 	color: var(--text-muted);
 	margin-bottom: 0.5em;
@@ -949,9 +1200,14 @@ export const dialogStyles = `
 }
 
 .conflict-list {
-	max-height: 400px;
+	flex: 1;
+	min-height: 100px;
 	overflow-y: auto;
 	margin-bottom: 1em;
+}
+
+.gdrive-sync-modal-resizable .conflict-list {
+	max-height: none;
 }
 
 .conflict-item {
