@@ -25,6 +25,7 @@ import {
 	createEmptyMeta,
 	generateBackupFilename,
 	generateConflictFilename,
+	generateUntrackedFilename,
 } from './meta';
 import {
 	getFilesList,
@@ -38,6 +39,7 @@ import {
 	ConflictDialog,
 	ConflictInfoWithContent,
 	ConfirmFullSyncDialog,
+	PullRequiredDialog,
 	SyncProgressDialog,
 	ModifiedFilesNoticeDialog,
 	ModifiedDeleteInfo,
@@ -242,65 +244,32 @@ export class SyncEngine {
 				return;
 			}
 
-			// Case: No local meta - remote is authoritative, but check if local is newer
+			// Case: No local meta but remote exists - require Pull first
 			if (!localMeta) {
-				const currentLocalMeta = await buildMetaFromVault(this.vault, this.settings.excludePatterns);
-
-				// Find conflicts only when local file is newer than remote
-				const conflicts: ConflictInfoWithContent[] = [];
-				for (const [path, localInfo] of Object.entries(currentLocalMeta.files)) {
-					const remoteInfo = remoteMeta.files[path];
-					if (remoteInfo && localInfo.hash !== remoteInfo.hash) {
-						// Only conflict if local is newer than remote
-						if (new Date(localInfo.modifiedTime) > new Date(remoteInfo.modifiedTime)) {
-							const conflict: ConflictInfoWithContent = {
-								path,
-								localModifiedTime: localInfo.modifiedTime,
-								remoteModifiedTime: remoteInfo.modifiedTime,
-								localHash: localInfo.hash,
-								remoteHash: remoteInfo.hash,
-							};
-
-							// Load content for markdown files (for diff display)
-							if (path.endsWith('.md')) {
-								conflict.localContent = await this.readFileAsText(path);
-								const driveFile = filesList.find(f => f.name === path);
-								if (driveFile) {
-									conflict.remoteContent = await this.downloadFileAsText(driveFile.id);
-								}
-							}
-
-							conflicts.push(conflict);
-						}
-					}
-				}
-
-				if (conflicts.length > 0) {
-					// Show conflict dialog
-					new ConflictDialog(
-						this.app,
-						conflicts,
-						async (resolutions) => {
-							await this.handleConflictsAndPush(resolutions, currentLocalMeta, remoteMeta, filesList);
-						},
-						() => {
-							new Notice(t('pushCancelled'));
-						},
-						this.settings.conflictFolder
-					).open();
-					return;
-				}
-
-				// No conflicts - just push
-				await this.performPush(currentLocalMeta, remoteMeta, filesList, {});
+				new Notice(t('pullRequiredBeforePush'));
 				return;
 			}
 
-			// Both metas exist - compute diff
+			// Both metas exist - check if remote is newer
+			if (remoteMeta.lastUpdatedAt > localMeta.lastUpdatedAt) {
+				// Remote is newer - require Pull first
+				new PullRequiredDialog(
+					this.app,
+					async () => {
+						await this.pullChanges();
+					},
+					() => {
+						new Notice(t('pushCancelled'));
+					}
+				).open();
+				return;
+			}
+
+			// Compute diff for push
 			const diff = await this.computeDiff(localMeta, remoteMeta, filesList);
 
-			if (remoteMeta.lastUpdatedAt > localMeta.lastUpdatedAt && diff.conflicts.length > 0) {
-				// Remote is newer and has conflicts - load content for markdown files
+			if (diff.conflicts.length > 0) {
+				// Has conflicts - load content for markdown files
 				const conflictsWithContent: ConflictInfoWithContent[] = await Promise.all(
 					diff.conflicts.map(async (conflict) => {
 						const result: ConflictInfoWithContent = { ...conflict };
@@ -557,10 +526,42 @@ export class SyncEngine {
 			// Both metas exist - compute diff
 			const diff = await this.computeDiff(localMeta, remoteMeta, filesList);
 
-			// Check for conflicts
+			// Check for A | - | B conflicts (local modified, remote deleted)
+			const currentLocalMeta = await buildMetaFromVault(this.vault, this.settings.excludePatterns);
+			const remoteDeletedConflicts: ConflictInfoWithContent[] = [];
+
+			for (const [path, localMetaInfo] of Object.entries(localMeta.files)) {
+				if (shouldExclude(path, this.settings.excludePatterns)) continue;
+				if (remoteMeta.files[path]) continue; // File exists in remote meta
+
+				// File is in local meta but not in remote meta (remote deleted)
+				const actualLocalInfo = currentLocalMeta.files[path];
+				if (actualLocalInfo && actualLocalInfo.hash !== localMetaInfo.hash) {
+					// A | - | B: Local was modified after last sync, but remote deleted
+					const conflict: ConflictInfoWithContent = {
+						path,
+						localModifiedTime: actualLocalInfo.modifiedTime,
+						remoteModifiedTime: localMeta.lastUpdatedAt, // Use last sync time as deletion time
+						localHash: actualLocalInfo.hash,
+						remoteHash: '',
+						remoteDeleted: true,
+					};
+
+					// Load content for markdown files (only local, remote was deleted)
+					if (path.endsWith('.md')) {
+						conflict.localContent = await this.readFileAsText(path);
+					}
+
+					remoteDeletedConflicts.push(conflict);
+				}
+			}
+
+			// Combine all conflicts
+			const allConflicts: ConflictInfoWithContent[] = [...remoteDeletedConflicts];
+
+			// Add regular conflicts from diff (load content for markdown files)
 			if (diff.conflicts.length > 0) {
-				// Load content for markdown files
-				const conflictsWithContent: ConflictInfoWithContent[] = await Promise.all(
+				const regularConflicts = await Promise.all(
 					diff.conflicts.map(async (conflict) => {
 						const result: ConflictInfoWithContent = { ...conflict };
 						if (conflict.path.endsWith('.md')) {
@@ -573,10 +574,14 @@ export class SyncEngine {
 						return result;
 					})
 				);
+				allConflicts.push(...regularConflicts);
+			}
 
+			// Check for conflicts
+			if (allConflicts.length > 0) {
 				new ConflictDialog(
 					this.app,
-					conflictsWithContent,
+					allConflicts,
 					async (resolutions) => {
 						await this.performPull(remoteMeta, filesList, resolutions);
 					},
@@ -623,58 +628,115 @@ export class SyncEngine {
 			for (const [path, remoteInfo] of Object.entries(remoteMeta.files)) {
 				if (shouldExclude(path, this.settings.excludePatterns)) continue;
 
-				const localInfo = currentLocalMeta.files[path];
+				const localMetaInfo = localMeta?.files[path];
+				const actualLocalInfo = currentLocalMeta.files[path];
 				const resolution = resolutions[path];
 
-				if (!localInfo) {
-					// New remote file
-					toDownload.push(path);
-				} else if (localInfo.hash !== remoteInfo.hash) {
-					// Changed file
-					if (resolution === 'local') {
-						// Keep local: save remote to conflict folder
-						const driveFile = filesList.find(f => f.name === path);
-						if (driveFile) {
-							const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
-							const conflictPath = generateConflictFilename(path, this.settings.conflictFolder);
-							await this.createFileWithPath(conflictPath, buffer);
-						}
-						continue;
-					} else {
-						// Default or 'remote': save local to conflict folder, then download
-						const file = this.vault.getAbstractFileByPath(path);
-						if (file instanceof TFile) {
-							const buffer = await this.vault.readBinary(file);
-							const conflictPath = generateConflictFilename(path, this.settings.conflictFolder);
-							await this.createFileWithPath(conflictPath, buffer);
-						}
+				if (!actualLocalInfo) {
+					if (!localMetaInfo) {
+						// New remote file (doesn't exist locally and wasn't tracked before)
+						toDownload.push(path);
+					} else if (localMetaInfo.hash !== remoteInfo.hash) {
+						// File was deleted locally but remote has newer version - download
 						toDownload.push(path);
 					}
+					// else: File was deleted locally and remote unchanged - skip
+					// The deletion will propagate to remote on next Push
+				} else if (!localMetaInfo) {
+					// File exists locally but not in local meta (new local file)
+					// Check if it conflicts with remote
+					if (actualLocalInfo.hash !== remoteInfo.hash) {
+						// Local file differs from remote - conflict
+						if (resolution === 'local') {
+							// Keep local: save remote to conflict folder
+							const driveFile = filesList.find(f => f.name === path);
+							if (driveFile) {
+								const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
+								const conflictPath = generateConflictFilename(path, this.settings.conflictFolder);
+								await this.createFileWithPath(conflictPath, buffer);
+							}
+							continue;
+						} else {
+							// Keep remote: save local to conflict folder, then download
+							const file = this.vault.getAbstractFileByPath(path);
+							if (file instanceof TFile) {
+								const buffer = await this.vault.readBinary(file);
+								const conflictPath = generateConflictFilename(path, this.settings.conflictFolder);
+								await this.createFileWithPath(conflictPath, buffer);
+							}
+							toDownload.push(path);
+						}
+					}
+					// If hashes match, skip (same content)
+				} else if (localMetaInfo.hash !== remoteInfo.hash) {
+					// Remote changed since last sync
+					if (localMetaInfo.hash === actualLocalInfo.hash) {
+						// Local file unchanged - safe to overwrite
+						toDownload.push(path);
+					} else {
+						// Local file also changed - conflict
+						if (resolution === 'local') {
+							// Keep local: save remote to conflict folder
+							const driveFile = filesList.find(f => f.name === path);
+							if (driveFile) {
+								const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
+								const conflictPath = generateConflictFilename(path, this.settings.conflictFolder);
+								await this.createFileWithPath(conflictPath, buffer);
+							}
+							continue;
+						} else {
+							// Keep remote: save local to conflict folder, then download
+							const file = this.vault.getAbstractFileByPath(path);
+							if (file instanceof TFile) {
+								const buffer = await this.vault.readBinary(file);
+								const conflictPath = generateConflictFilename(path, this.settings.conflictFolder);
+								await this.createFileWithPath(conflictPath, buffer);
+							}
+							toDownload.push(path);
+						}
+					}
 				}
+				// If localMeta.hash == remoteMeta.hash, skip (no remote changes)
 			}
 
-			// Determine what to delete locally (was in remote meta but no longer)
+			// Determine what to delete locally (was in local meta but not in remote meta)
 			const modifiedDeletes: ModifiedDeleteInfo[] = [];
+			const keptLocalFiles: string[] = []; // Files kept due to A | - | B conflict resolution
 			if (localMeta) {
 				const lastUpdatedTime = new Date(localMeta.lastUpdatedAt).getTime();
 				for (const path of Object.keys(localMeta.files)) {
 					if (!remoteMeta.files[path] && !shouldExclude(path, this.settings.excludePatterns)) {
 						const file = this.vault.getAbstractFileByPath(path);
 						if (file instanceof TFile) {
+							// Check for A | - | B conflict resolution
+							const resolution = resolutions[path];
+
 							// Check if file was modified after lastUpdatedAt
-							if (file.stat.mtime > lastUpdatedTime) {
+							const isModified = file.stat.mtime > lastUpdatedTime;
+
+							if (isModified && resolution === 'local') {
+								// User chose to keep local - don't delete, will be uploaded on next Push
+								keptLocalFiles.push(path);
+								continue;
+							}
+
+							if (isModified && resolution !== 'remote') {
+								// Modified but no resolution yet (shouldn't happen if conflict was detected)
+								// Save to backup folder just in case
 								modifiedDeletes.push({
 									path,
 									modifiedTime: new Date(file.stat.mtime).toISOString(),
 								});
 							}
+
+							// If resolution is 'remote' or file wasn't modified, delete it
 							toDelete.push(path);
 						}
 					}
 				}
 			}
 
-			// If there are modified files to delete, show notice dialog first
+			// If there are modified files to delete without resolution, show notice dialog first
 			if (modifiedDeletes.length > 0) {
 				progress.close();
 				await new Promise<void>((resolve) => {
@@ -736,10 +798,19 @@ export class SyncEngine {
 
 			// Update local meta to match remote
 			const newLocalMeta = { ...remoteMeta };
+			newLocalMeta.files = { ...remoteMeta.files };
 			newLocalMeta.lastSyncTimestamp = new Date().toISOString();
 
 			// Rebuild file hashes for downloaded files
 			for (const path of toDownload) {
+				const metadata = await buildFileMetadata(this.vault, path);
+				if (metadata) {
+					newLocalMeta.files[path] = metadata;
+				}
+			}
+
+			// Add back files that user chose to keep (A | - | B conflict with 'local' resolution)
+			for (const path of keptLocalFiles) {
 				const metadata = await buildFileMetadata(this.vault, path);
 				if (metadata) {
 					newLocalMeta.files[path] = metadata;
@@ -799,33 +870,35 @@ export class SyncEngine {
 				const updatedFiles: UpdatedFileInfo[] = [];
 
 				// Upload files in parallel, skipping files with matching hash
+				// If hash differs, rename remote file to make it untracked before uploading
 				await parallelProcess(files, async (file) => {
 					const buffer = await this.vault.readBinary(file);
 					const driveFile = filesList.find(f => f.name === file.path);
 
-					// Check if remote has the same hash - skip if identical
 					if (driveFile && remoteMeta?.files[file.path]) {
 						const localHash = await calculateHash(buffer);
 						const remoteHash = remoteMeta.files[file.path].hash;
 
 						if (localHash === remoteHash) {
+							// Same hash - skip upload
 							skipped++;
 							completed++;
 							progress.setProgress(completed, `Skipped (same): ${file.path}`);
 							return;
 						}
+
+						// Different hash - rename remote file to make it untracked
+						const untrackedName = generateUntrackedFilename(file.path);
+						await renameFile(this.settings.accessToken, driveFile.id, untrackedName);
 					}
 
-					if (driveFile) {
-						await modifyFile(this.settings.accessToken, driveFile.id, buffer);
-					} else {
-						await uploadFile(
-							this.settings.accessToken,
-							file.path,
-							buffer,
-							this.settings.vaultId
-						);
-					}
+					// Upload new file (always create new since we renamed the old one)
+					await uploadFile(
+						this.settings.accessToken,
+						file.path,
+						buffer,
+						this.settings.vaultId
+					);
 
 					updatedFiles.push({
 						path: file.path,
@@ -925,8 +998,9 @@ export class SyncEngine {
 					const updatedFiles: UpdatedFileInfo[] = [];
 
 					// Download files in parallel, skipping files with matching hash
+					// If hash differs, save local to conflict folder before downloading
 					await parallelProcess(remoteFiles, async (driveFile) => {
-						// Check if local file exists and has the same hash
+						// Check if local file exists
 						const localFile = this.vault.getAbstractFileByPath(driveFile.name);
 						if (localFile instanceof TFile && remoteMeta.files[driveFile.name]) {
 							const localBuffer = await this.vault.readBinary(localFile);
@@ -934,11 +1008,16 @@ export class SyncEngine {
 							const remoteHash = remoteMeta.files[driveFile.name].hash;
 
 							if (localHash === remoteHash) {
+								// Same hash - skip download
 								skipped++;
 								completed++;
 								progress.setProgress(completed, `Skipped (same): ${driveFile.name}`);
 								return;
 							}
+
+							// Different hash - save local to conflict folder before overwriting
+							const conflictPath = generateConflictFilename(driveFile.name, this.settings.conflictFolder);
+							await this.createFileWithPath(conflictPath, localBuffer);
 						}
 
 						const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
@@ -1053,9 +1132,9 @@ export class SyncEngine {
 	}
 
 	/**
-	 * Get orphan files (files on Google Drive not tracked in meta)
+	 * Get untracked files (files on Google Drive not tracked in meta)
 	 */
-	async getOrphanFiles(): Promise<DriveFileInfo[]> {
+	async getUntrackedFiles(): Promise<DriveFileInfo[]> {
 		this.refreshSettings();
 		const filesList = await this.refreshFilesList();
 		const remoteMeta = await readRemoteMeta(
@@ -1064,7 +1143,7 @@ export class SyncEngine {
 			filesList
 		);
 
-		const orphanFiles: DriveFileInfo[] = [];
+		const untrackedFiles: DriveFileInfo[] = [];
 
 		for (const driveFile of filesList) {
 			// Skip meta file
@@ -1074,17 +1153,17 @@ export class SyncEngine {
 
 			// Check if file is tracked in remoteMeta
 			if (!remoteMeta?.files[driveFile.name]) {
-				orphanFiles.push(driveFile);
+				untrackedFiles.push(driveFile);
 			}
 		}
 
-		return orphanFiles;
+		return untrackedFiles;
 	}
 
 	/**
-	 * Delete orphan files from Google Drive
+	 * Delete untracked files from Google Drive
 	 */
-	async deleteOrphanFiles(fileIds: string[]): Promise<number> {
+	async deleteUntrackedFiles(fileIds: string[]): Promise<number> {
 		this.refreshSettings();
 		let deleted = 0;
 
@@ -1093,10 +1172,69 @@ export class SyncEngine {
 				await deleteFile(this.settings.accessToken, fileId);
 				deleted++;
 			} catch (err) {
-				console.error(`Failed to delete orphan file: ${fileId}`, err);
+				console.error(`Failed to delete untracked file: ${fileId}`, err);
 			}
 		}
 
 		return deleted;
+	}
+
+	/**
+	 * Restore untracked files from Google Drive to local vault
+	 */
+	async restoreUntrackedFiles(files: DriveFileInfo[]): Promise<number> {
+		this.refreshSettings();
+		let restored = 0;
+
+		const filesList = await this.refreshFilesList();
+		const localMeta = await readLocalMeta(this.vault) || createEmptyMeta();
+		const remoteMeta = await readRemoteMeta(
+			this.settings.accessToken,
+			this.settings.vaultId,
+			filesList
+		) || createEmptyMeta();
+
+		for (const driveFile of files) {
+			try {
+				// Download file from Google Drive
+				const [, buffer] = await getFile(this.settings.accessToken, driveFile.id);
+
+				// Create local file
+				await this.createFileWithPath(driveFile.name, buffer);
+
+				// Build metadata for the restored file
+				const metadata = await buildFileMetadata(this.vault, driveFile.name);
+				if (metadata) {
+					// Add to both local and remote meta
+					localMeta.files[driveFile.name] = metadata;
+					remoteMeta.files[driveFile.name] = metadata;
+				}
+
+				restored++;
+			} catch (err) {
+				console.error(`Failed to restore untracked file: ${driveFile.name}`, err);
+			}
+		}
+
+		// Update meta files if any files were restored
+		if (restored > 0) {
+			const now = new Date().toISOString();
+			localMeta.lastSyncTimestamp = now;
+			localMeta.lastUpdatedAt = now;
+			remoteMeta.lastSyncTimestamp = now;
+			remoteMeta.lastUpdatedAt = now;
+
+			await writeLocalMeta(this.vault, localMeta);
+
+			const newFilesList = await this.refreshFilesList();
+			await writeRemoteMeta(
+				this.settings.accessToken,
+				this.settings.vaultId,
+				remoteMeta,
+				newFilesList
+			);
+		}
+
+		return restored;
 	}
 }

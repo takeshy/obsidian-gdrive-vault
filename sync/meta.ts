@@ -257,3 +257,25 @@ export function generateConflictFilename(originalPath: string, conflictFolder: s
 	const ext = fileName.slice(lastDot);
 	return `${conflictFolder}/${name}_${timestamp}${ext}`;
 }
+
+/**
+ * Generate an untracked filename by adding timestamp suffix
+ * Used for renaming remote files before overwriting in Full Push
+ * e.g., "notes/daily.md" → "notes/daily_20240124_103000.md"
+ */
+export function generateUntrackedFilename(originalPath: string): string {
+	const timestamp = new Date().toISOString()
+		.replace(/[-:]/g, '')
+		.replace('T', '_')
+		.slice(0, 15); // YYYYMMDD_HHMMSS
+
+	const lastDot = originalPath.lastIndexOf('.');
+
+	if (lastDot === -1) {
+		return `${originalPath}_${timestamp}`;
+	}
+
+	const name = originalPath.slice(0, lastDot);
+	const ext = originalPath.slice(lastDot);
+	return `${name}_${timestamp}${ext}`;
+}

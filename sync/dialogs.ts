@@ -169,19 +169,36 @@ export class ConflictDialog extends Modal {
 			cls: 'conflict-path',
 		});
 
+		// Show description for remote deleted conflicts
+		if (conflict.remoteDeleted) {
+			item.createEl('div', {
+				text: t('remoteDeletedConflictDesc'),
+				cls: 'conflict-remote-deleted-desc',
+			});
+		}
+
 		const times = item.createDiv({ cls: 'conflict-times' });
 		times.createEl('div', {
 			text: t('localTime', { time: formatDate(conflict.localModifiedTime) }),
 			cls: 'conflict-time-local',
 		});
-		times.createEl('div', {
-			text: t('remoteTime', { time: formatDate(conflict.remoteModifiedTime) }),
-			cls: 'conflict-time-remote',
-		});
 
-		// Diff toggle for markdown files
+		// Show "(deleted)" for remote if it was deleted
+		if (conflict.remoteDeleted) {
+			times.createEl('div', {
+				text: `${t('keepRemote')}: ${t('remoteDeleted')}`,
+				cls: 'conflict-time-remote conflict-remote-deleted',
+			});
+		} else {
+			times.createEl('div', {
+				text: t('remoteTime', { time: formatDate(conflict.remoteModifiedTime) }),
+				cls: 'conflict-time-remote',
+			});
+		}
+
+		// Diff toggle for markdown files (skip if remote was deleted)
 		const isMarkdown = conflict.path.endsWith('.md');
-		if (isMarkdown && conflict.localContent !== undefined && conflict.remoteContent !== undefined) {
+		if (isMarkdown && !conflict.remoteDeleted && conflict.localContent !== undefined && conflict.remoteContent !== undefined) {
 			const diffContainer = item.createDiv({ cls: 'conflict-diff-container' });
 
 			const toggleBtn = diffContainer.createEl('span', {
@@ -324,6 +341,55 @@ export class ConfirmFullSyncDialog extends Modal {
 					.onClick(() => {
 						this.close();
 						this.onConfirm();
+					})
+			)
+			.addButton(btn =>
+				btn
+					.setButtonText(t('cancel'))
+					.onClick(() => {
+						this.close();
+						this.onCancel();
+					})
+			);
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+/**
+ * Dialog shown when remote is newer and pull is required before push
+ */
+export class PullRequiredDialog extends Modal {
+	private onPull: () => void;
+	private onCancel: () => void;
+
+	constructor(
+		app: App,
+		onPull: () => void,
+		onCancel: () => void
+	) {
+		super(app);
+		this.onPull = onPull;
+		this.onCancel = onCancel;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+
+		contentEl.createEl('h2', { text: t('pullRequiredTitle') });
+		contentEl.createEl('p', { text: t('pullRequiredMessage') });
+
+		new Setting(contentEl)
+			.addButton(btn =>
+				btn
+					.setButtonText(t('pullNow'))
+					.setCta()
+					.onClick(() => {
+						this.close();
+						this.onPull();
 					})
 			)
 			.addButton(btn =>
@@ -679,45 +745,49 @@ export class SyncCompleteDialog extends Modal {
 /**
  * Orphan file info for display
  */
-export interface OrphanFileInfo {
+export interface UntrackedFileInfo {
 	id: string;
 	name: string;
 }
 
 /**
- * Dialog for selecting and deleting orphan files
+ * Dialog for selecting, deleting, or restoring untracked files
  */
-export class OrphanFilesDialog extends Modal {
-	private files: OrphanFileInfo[];
+export class UntrackedFilesDialog extends Modal {
+	private files: UntrackedFileInfo[];
 	private onDelete: (fileIds: string[]) => Promise<void>;
+	private onRestore: (fileIds: string[]) => Promise<void>;
 	private selectedFiles: Set<string> = new Set();
 	private checkboxes: Map<string, HTMLInputElement> = new Map();
 	private selectAllCheckbox: HTMLInputElement | null = null;
 	private deleteButton: HTMLButtonElement | null = null;
+	private restoreButton: HTMLButtonElement | null = null;
 
 	constructor(
 		app: App,
-		files: OrphanFileInfo[],
-		onDelete: (fileIds: string[]) => Promise<void>
+		files: UntrackedFileInfo[],
+		onDelete: (fileIds: string[]) => Promise<void>,
+		onRestore: (fileIds: string[]) => Promise<void>
 	) {
 		super(app);
 		this.files = files;
 		this.onDelete = onDelete;
+		this.onRestore = onRestore;
 	}
 
 	onOpen() {
 		const { contentEl } = this;
 
-		contentEl.createEl('h2', { text: t('orphanFilesTitle') });
+		contentEl.createEl('h2', { text: t('untrackedFilesTitle') });
 		contentEl.createEl('p', {
-			text: t('orphanFilesDesc'),
-			cls: 'orphan-dialog-description',
+			text: t('untrackedFilesDesc'),
+			cls: 'untracked-dialog-description',
 		});
 
 		if (this.files.length === 0) {
 			contentEl.createEl('p', {
-				text: t('noOrphanFiles'),
-				cls: 'orphan-no-files',
+				text: t('noUntrackedFiles'),
+				cls: 'untracked-no-files',
 			});
 			new Setting(contentEl)
 				.addButton(btn =>
@@ -730,8 +800,8 @@ export class OrphanFilesDialog extends Modal {
 		}
 
 		// Select all checkbox
-		const selectAllContainer = contentEl.createDiv({ cls: 'orphan-select-all' });
-		const selectAllLabel = selectAllContainer.createEl('label', { cls: 'orphan-checkbox-label' });
+		const selectAllContainer = contentEl.createDiv({ cls: 'untracked-select-all' });
+		const selectAllLabel = selectAllContainer.createEl('label', { cls: 'untracked-checkbox-label' });
 		this.selectAllCheckbox = selectAllLabel.createEl('input', { type: 'checkbox' });
 		selectAllLabel.createSpan({ text: t('selectAll') });
 
@@ -745,17 +815,17 @@ export class OrphanFilesDialog extends Modal {
 					this.selectedFiles.delete(fileId);
 				}
 			}
-			this.updateDeleteButton();
+			this.updateButtons();
 		});
 
 		// File list with checkboxes
-		const fileListContainer = contentEl.createDiv({ cls: 'orphan-file-list' });
+		const fileListContainer = contentEl.createDiv({ cls: 'untracked-file-list' });
 
 		for (const file of this.files) {
-			const fileEl = fileListContainer.createDiv({ cls: 'orphan-file-item' });
-			const label = fileEl.createEl('label', { cls: 'orphan-checkbox-label' });
+			const fileEl = fileListContainer.createDiv({ cls: 'untracked-file-item' });
+			const label = fileEl.createEl('label', { cls: 'untracked-checkbox-label' });
 			const checkbox = label.createEl('input', { type: 'checkbox' });
-			label.createSpan({ text: file.name, cls: 'orphan-file-name' });
+			label.createSpan({ text: file.name, cls: 'untracked-file-name' });
 
 			this.checkboxes.set(file.id, checkbox);
 
@@ -766,12 +836,39 @@ export class OrphanFilesDialog extends Modal {
 					this.selectedFiles.delete(file.id);
 				}
 				this.updateSelectAllCheckbox();
-				this.updateDeleteButton();
+				this.updateButtons();
 			});
 		}
 
 		// Buttons
 		const buttonContainer = new Setting(contentEl);
+
+		// Restore button
+		buttonContainer.addButton(btn => {
+			this.restoreButton = btn.buttonEl;
+			btn
+				.setButtonText(t('restoreSelected', { count: '0' }))
+				.setCta()
+				.setDisabled(true)
+				.onClick(async () => {
+					if (this.selectedFiles.size === 0) return;
+
+					const fileIds = Array.from(this.selectedFiles);
+					this.setButtonsDisabled(true);
+					btn.setButtonText(t('restoring'));
+
+					try {
+						await this.onRestore(fileIds);
+						this.close();
+					} catch (err) {
+						console.error('Failed to restore untracked files:', err);
+						btn.setButtonText(t('restoreSelected', { count: fileIds.length.toString() }));
+						this.setButtonsDisabled(false);
+					}
+				});
+		});
+
+		// Delete button
 		buttonContainer.addButton(btn => {
 			this.deleteButton = btn.buttonEl;
 			btn
@@ -782,19 +879,20 @@ export class OrphanFilesDialog extends Modal {
 					if (this.selectedFiles.size === 0) return;
 
 					const fileIds = Array.from(this.selectedFiles);
-					btn.setDisabled(true);
+					this.setButtonsDisabled(true);
 					btn.setButtonText(t('deleting'));
 
 					try {
 						await this.onDelete(fileIds);
 						this.close();
 					} catch (err) {
-						console.error('Failed to delete orphan files:', err);
+						console.error('Failed to delete untracked files:', err);
 						btn.setButtonText(t('deleteSelected', { count: fileIds.length.toString() }));
-						btn.setDisabled(false);
+						this.setButtonsDisabled(false);
 					}
 				});
 		});
+
 		buttonContainer.addButton(btn =>
 			btn
 				.setButtonText(t('cancel'))
@@ -809,11 +907,21 @@ export class OrphanFilesDialog extends Modal {
 			this.selectedFiles.size > 0 && this.selectedFiles.size < this.files.length;
 	}
 
-	private updateDeleteButton() {
-		if (!this.deleteButton) return;
+	private updateButtons() {
 		const count = this.selectedFiles.size;
-		this.deleteButton.textContent = t('deleteSelected', { count: count.toString() });
-		this.deleteButton.disabled = count === 0;
+		if (this.deleteButton) {
+			this.deleteButton.textContent = t('deleteSelected', { count: count.toString() });
+			this.deleteButton.disabled = count === 0;
+		}
+		if (this.restoreButton) {
+			this.restoreButton.textContent = t('restoreSelected', { count: count.toString() });
+			this.restoreButton.disabled = count === 0;
+		}
+	}
+
+	private setButtonsDisabled(disabled: boolean) {
+		if (this.deleteButton) this.deleteButton.disabled = disabled;
+		if (this.restoreButton) this.restoreButton.disabled = disabled;
 	}
 
 	onClose() {
@@ -863,6 +971,17 @@ export const dialogStyles = `
 	font-size: 0.85em;
 	color: var(--text-muted);
 	margin-bottom: 8px;
+}
+
+.conflict-remote-deleted-desc {
+	font-size: 0.9em;
+	color: var(--text-warning);
+	margin-bottom: 8px;
+	font-style: italic;
+}
+
+.conflict-remote-deleted {
+	color: var(--text-error);
 }
 
 .conflict-buttons {
@@ -1132,23 +1251,23 @@ export const dialogStyles = `
 	font-size: 0.9em;
 }
 
-.orphan-dialog-description {
+.untracked-dialog-description {
 	color: var(--text-muted);
 	margin-bottom: 1em;
 }
 
-.orphan-no-files {
+.untracked-no-files {
 	color: var(--text-muted);
 	font-style: italic;
 }
 
-.orphan-select-all {
+.untracked-select-all {
 	margin-bottom: 0.5em;
 	padding-bottom: 0.5em;
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.orphan-file-list {
+.untracked-file-list {
 	max-height: 300px;
 	overflow-y: auto;
 	margin-bottom: 1em;
@@ -1156,27 +1275,27 @@ export const dialogStyles = `
 	border-radius: 4px;
 }
 
-.orphan-file-item {
+.untracked-file-item {
 	padding: 6px 10px;
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.orphan-file-item:last-child {
+.untracked-file-item:last-child {
 	border-bottom: none;
 }
 
-.orphan-file-item:hover {
+.untracked-file-item:hover {
 	background: var(--background-secondary);
 }
 
-.orphan-checkbox-label {
+.untracked-checkbox-label {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	cursor: pointer;
 }
 
-.orphan-file-name {
+.untracked-file-name {
 	font-family: var(--font-monospace);
 	font-size: 0.85em;
 	word-break: break-all;

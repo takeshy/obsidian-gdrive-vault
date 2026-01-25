@@ -72,6 +72,10 @@ const translations = {
 		checkingChanges: 'Checking for changes...',
 		noRemoteData: 'No remote sync data found. Uploading vault...',
 		noRemoteDataPull: 'No remote sync data found. Nothing to pull.',
+		pullRequiredBeforePush: 'Remote data exists but no local sync data. Please Pull first.',
+		pullRequiredTitle: 'Pull Required',
+		pullRequiredMessage: 'Remote has newer changes. Please pull before pushing.',
+		pullNow: 'Pull Now',
 		pushCancelled: 'Push cancelled.',
 		pushFailed: 'Push failed. Check console for details.',
 		pushComplete: 'Push complete!',
@@ -137,15 +141,22 @@ const translations = {
 		uploadComplete: 'Upload Complete',
 		downloadComplete: 'Download Complete',
 
-		// Orphan Files
-		orphanFilesTitle: 'Orphan Files',
-		orphanFilesDesc: 'Files on Google Drive not tracked in sync metadata. These files will not be synced to other devices.',
-		orphanFilesButton: 'Detect Orphan Files',
-		orphanFilesButtonDesc: 'Find and delete files on Google Drive that are not tracked in metadata',
-		noOrphanFiles: 'No orphan files found.',
+		// Remote Deleted Conflict
+		remoteDeleted: '(deleted)',
+		remoteDeletedConflictDesc: 'This file was modified locally but deleted from remote.',
+
+		// Untracked Remote Files
+		untrackedFilesTitle: 'Untracked Remote Files',
+		untrackedFilesDesc: 'Files on Google Drive not tracked in sync metadata. These files will not be synced to other devices.',
+		untrackedFilesButton: 'Detect Untracked Files',
+		untrackedFilesButtonDesc: 'Find and delete files on Google Drive that are not tracked in metadata',
+		noUntrackedFiles: 'No untracked files found.',
 		selectAll: 'Select All',
 		deleteSelected: 'Delete Selected ({count})',
-		orphanFilesDeleted: 'Deleted {count} orphan file(s)',
+		restoreSelected: 'Restore Selected ({count})',
+		untrackedFilesDeleted: 'Deleted {count} untracked file(s)',
+		untrackedFilesRestored: 'Restored {count} untracked file(s)',
+		restoring: 'Restoring...',
 	},
 	ja: {
 		// Common
@@ -214,6 +225,10 @@ const translations = {
 		checkingChanges: '変更を確認中...',
 		noRemoteData: 'リモートに同期データがありません。Vaultをアップロードします...',
 		noRemoteDataPull: 'リモートに同期データがありません。プルするものがありません。',
+		pullRequiredBeforePush: 'リモートにデータがありますがローカルに同期データがありません。先にPullしてください。',
+		pullRequiredTitle: 'Pullが必要です',
+		pullRequiredMessage: 'リモートに新しい変更があります。プッシュする前にプルしてください。',
+		pullNow: '今すぐPull',
 		pushCancelled: 'プッシュがキャンセルされました。',
 		pushFailed: 'プッシュに失敗しました。詳細はコンソールを確認してください。',
 		pushComplete: 'プッシュ完了！',
@@ -279,15 +294,22 @@ const translations = {
 		uploadComplete: 'アップロード完了',
 		downloadComplete: 'ダウンロード完了',
 
-		// Orphan Files
-		orphanFilesTitle: 'Orphanファイル',
-		orphanFilesDesc: 'Google Drive上にあるが同期メタデータで追跡されていないファイル。これらのファイルは他のデバイスに同期されません。',
-		orphanFilesButton: 'Orphanファイルを検出',
-		orphanFilesButtonDesc: 'メタデータで追跡されていないGoogle Drive上のファイルを検出・削除',
-		noOrphanFiles: 'Orphanファイルは見つかりませんでした。',
+		// Remote Deleted Conflict
+		remoteDeleted: '(削除済み)',
+		remoteDeletedConflictDesc: 'このファイルはローカルで変更されましたが、リモートでは削除されています。',
+
+		// Untracked Remote Files
+		untrackedFilesTitle: '未追跡のリモートファイル',
+		untrackedFilesDesc: 'Google Drive上にあるが同期メタデータで追跡されていないファイル。これらのファイルは他のデバイスに同期されません。',
+		untrackedFilesButton: '未追跡ファイルを検出',
+		untrackedFilesButtonDesc: 'メタデータで追跡されていないGoogle Drive上のファイルを検出・削除',
+		noUntrackedFiles: '未追跡ファイルは見つかりませんでした。',
 		selectAll: 'すべて選択',
 		deleteSelected: '選択を削除 ({count})',
-		orphanFilesDeleted: '{count}個のOrphanファイルを削除しました',
+		restoreSelected: '選択を復元 ({count})',
+		untrackedFilesDeleted: '{count}個の未追跡ファイルを削除しました',
+		untrackedFilesRestored: '{count}個の未追跡ファイルを復元しました',
+		restoring: '復元中...',
 	},
 };
 
