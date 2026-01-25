@@ -1318,22 +1318,48 @@ export class SyncEngine {
 	}
 
 	/**
-	 * Delete all temporary files from Google Drive
+	 * Delete selected temporary files from Google Drive
 	 */
-	async clearTempFiles(): Promise<number> {
+	async deleteTempFiles(fileIds: string[]): Promise<number> {
 		this.refreshSettings();
-		const tempFiles = await this.getTempFiles();
 		let deleted = 0;
 
-		for (const file of tempFiles) {
+		for (const fileId of fileIds) {
 			try {
-				await deleteFile(this.settings.accessToken, file.id);
+				await deleteFile(this.settings.accessToken, fileId);
 				deleted++;
 			} catch (err) {
-				console.error(`Failed to delete temp file: ${file.name}`, err);
+				console.error(`Failed to delete temp file: ${fileId}`, err);
 			}
 		}
 
 		return deleted;
+	}
+
+	/**
+	 * Download selected temporary files to local vault
+	 */
+	async downloadTempFiles(fileIds: string[]): Promise<number> {
+		this.refreshSettings();
+		const filesList = await this.refreshFilesList();
+		let downloaded = 0;
+
+		for (const fileId of fileIds) {
+			try {
+				const driveFile = filesList.find(f => f.id === fileId);
+				if (!driveFile) continue;
+
+				// Remove __TEMP__/ prefix to get original path
+				const originalPath = driveFile.name.replace(TEMP_SYNC_PREFIX, '');
+
+				const [, buffer] = await getFile(this.settings.accessToken, fileId);
+				await this.createFileWithPath(originalPath, buffer);
+				downloaded++;
+			} catch (err) {
+				console.error(`Failed to download temp file: ${fileId}`, err);
+			}
+		}
+
+		return downloaded;
 	}
 }

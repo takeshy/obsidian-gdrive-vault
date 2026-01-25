@@ -91,7 +91,7 @@ Quick file sharing without full sync overhead. Use when:
 
 **Tip**: Assign hotkeys in Obsidian Settings → Hotkeys for quick access.
 
-**Clear temp files**: Settings → Temporary Sync → Clear All
+**Manage temp files**: Settings → Temporary Sync → Manage Temporary Files (select and download or delete)
 
 ### How It Works
 
