@@ -157,6 +157,10 @@ export async function buildMetaFromVault(
 	const files = vault.getFiles();
 
 	for (const file of files) {
+		// Skip meta files
+		if (file.path === META_FILE_NAME_LOCAL || file.path === META_FILE_NAME_REMOTE) {
+			continue;
+		}
 		if (shouldExclude(file.path, excludePatterns)) {
 			continue;
 		}
@@ -252,4 +256,26 @@ export function generateConflictFilename(originalPath: string, conflictFolder: s
 	const name = fileName.slice(0, lastDot);
 	const ext = fileName.slice(lastDot);
 	return `${conflictFolder}/${name}_${timestamp}${ext}`;
+}
+
+/**
+ * Generate an untracked filename by adding timestamp suffix
+ * Used for renaming remote files before overwriting in Full Push
+ * e.g., "notes/daily.md" → "notes/daily_20240124_103000.md"
+ */
+export function generateUntrackedFilename(originalPath: string): string {
+	const timestamp = new Date().toISOString()
+		.replace(/[-:]/g, '')
+		.replace('T', '_')
+		.slice(0, 15); // YYYYMMDD_HHMMSS
+
+	const lastDot = originalPath.lastIndexOf('.');
+
+	if (lastDot === -1) {
+		return `${originalPath}_${timestamp}`;
+	}
+
+	const name = originalPath.slice(0, lastDot);
+	const ext = originalPath.slice(lastDot);
+	return `${name}_${timestamp}${ext}`;
 }

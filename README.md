@@ -5,12 +5,8 @@ A manual sync plugin for Obsidian that syncs your vault to Google Drive.
 ## Features
 
 - **Manual Sync**: Push and pull changes when you want
-- **Conflict Resolution**: Choose Local or Remote with side-by-side diff view for markdown files
-- **Conflict Backup**: Unselected version saved to `sync_conflicts/` folder for manual merging
-- **Version Tracking**: Only syncs when there are actual changes
-- **Smart Sync**: Full push/pull skips unchanged files by comparing hashes
-- **Completion Summary**: Shows list of updated files with modification times
-- **Parallel Processing**: Fast uploads/downloads with 5 concurrent operations
+- **Safe Sync**: Preserves old versions for recovery
+- **Conflict Resolution**: Side-by-side diff view for markdown files
 - **Cross-Platform**: Works on desktop, Android, and iOS
 - **i18n Support**: English and Japanese UI
 
@@ -36,7 +32,7 @@ See [obsidian-oauth/README.md](obsidian-oauth/README.md) for detailed instructio
      fetchRefreshTokenURL: "https://YOUR_PROJECT.appspot.com/auth/obsidian",
    };
    ```
-4. Push to main branch (GitHub Action will create a release)
+3. Push to main branch (GitHub Action will create a release)
 
 ### 3. Install via BRAT
 
@@ -68,145 +64,287 @@ For additional devices:
 3. Configure with the same Google account
 4. Use **Pull Changes** to download all files
 
-## Usage
-
-### Ribbon Buttons
-
-| Button | Action |
-|--------|--------|
-| Upload icon | **Push Changes** - Upload local changes to Google Drive |
-| Download icon | **Pull Changes** - Download remote changes to local |
-
-### Commands (Command Palette)
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `Push changes to Google Drive` | Upload changed files |
-| `Pull changes from Google Drive` | Download changed files |
-| `Full push to Google Drive` | Upload entire vault (skips unchanged files) |
-| `Full pull from Google Drive` | Download entire vault (skips unchanged files) |
+| **Push Changes** | Upload local changes (incremental) |
+| **Pull Changes** | Download remote changes (incremental) |
+| **Full Push** | Upload entire vault with backup |
+| **Full Pull** | Download entire vault with backup |
 
-Full sync operations compare file hashes and skip files that are already identical, showing a completion dialog with the list of actually updated files.
+Ribbon buttons: Upload icon = Push, Download icon = Pull
 
-### Settings
-
-| Setting | Description |
-|---------|-------------|
-| Exclude patterns | Glob patterns for files to exclude from sync |
-| Conflict folder | Directory name for saving unselected conflict versions (default: `sync_conflicts`) |
-| Clear conflict files | Delete all files in the conflict folder |
-| Remote Excluded Files | View and delete files on remote that match current exclude patterns |
-| Full Push | Upload entire vault |
-| Full Pull | Download entire vault |
-
-![Settings](settings.png)
-
-Default exclude patterns:
-- `.obsidian/**` - Obsidian config folder
-- `.**` - Dot files
-- `.*/**` - Dot folders
-- `sync_conflicts/**` - Conflict backup folder
+---
 
 ## How Sync Works
 
-### Meta Files
+### Overview
 
-The plugin uses meta files to track sync state:
+The plugin tracks file states using metadata files:
+- **Local Meta**: `.obsidian/gdrive-vault-meta.json`
+- **Remote Meta**: `_gdrive-vault-meta.json` (on Google Drive)
 
-| Location | File |
-|----------|------|
-| Local | `.obsidian/gdrive-vault-meta.json` |
-| Remote | `_gdrive-vault-meta.json` |
+Each meta file contains:
+- `lastUpdatedAt`: Timestamp of last sync
+- `files`: Hash and modification time for each file
 
-Meta file structure:
-```json
-{
-  "lastUpdatedAt": "2024-01-24T10:30:00.000Z",
-  "lastSyncTimestamp": "2024-01-24T10:30:00.000Z",
-  "files": {
-    "notes/daily.md": {
-      "hash": "sha256...",
-      "modifiedTime": "2024-01-24T09:15:00.000Z"
-    }
-  }
-}
-```
+---
 
-### Last Updated Timestamp
+## Push Changes (Incremental)
 
-- Updated only when files are actually uploaded/deleted
-- Used to detect if remote has newer changes
-- Displayed in settings for easy reference
-- No change = no timestamp update
+Uploads only changed files from local to remote.
 
-### Push Changes Flow
+### Flow
 
-1. **No remote meta**: Full upload, create meta with current timestamp
-2. **No local meta**: Compare hashes, show conflicts if different, then push
-3. **Local newer or same as remote**: Upload changed files, update timestamp
-4. **Remote newer than local**: Check for conflicts, show dialog if any
+1. **Check preconditions**
+   - No remote meta → Full Push
+   - No local meta → Error: "Pull required first"
+   - Remote newer than local → Dialog: "Pull required" with [Pull Now] button
 
-### Pull Changes Flow
+2. **Calculate diff** (for each file)
+   - Compare: Saved Meta vs Actual File
 
-1. **No remote meta**: Nothing to pull
-2. **No local meta**: Compare hashes, show conflicts if different, then download
-3. **Local newer or same as remote**: Nothing to pull
-4. **Remote newer than local**: Download changed files, delete removed files
+3. **Upload changed files**
 
-### Conflict Resolution
+### Preconditions
 
-When both local and remote have changes to the same file:
+| Local Meta | Remote Meta | Remote Newer | Action |
+|:----------:|:-----------:|:------------:|--------|
+| - | - | - | Full Push (first sync) |
+| - | exists | - | Error: "Pull required first" |
+| exists | exists | Yes | Dialog: "Pull required" |
+| exists | exists | No | Proceed with Push |
 
-| Option | Behavior |
-|--------|----------|
-| Keep Local | Upload local version to remote, save remote to `sync_conflicts/` |
-| Keep Remote | Download remote version to local, save local to `sync_conflicts/` |
+### Decision Table
 
-**Features:**
-- **Side-by-side diff view** for markdown files (shows differences between local and remote)
-- **Mobile responsive** - vertical layout on narrow screens
-- **Backup to conflict folder** - unselected version saved as `sync_conflicts/filename_YYYYMMDD_HHMMSS.ext`
-- **Manual merge support** - use the backup files to manually merge changes if needed
+After preconditions pass, saved local meta = remote meta (synced state).
 
-The conflict folder is automatically excluded from sync. Delete backup files when no longer needed via settings or manually.
+#### Files in Current Vault
 
-### Sync Completion Dialog
+| Saved Meta | Actual File | Remote File | Action |
+|:----------:|:-----------:|:-----------:|--------|
+| A | A | exists | Skip (unchanged) |
+| A | B | exists | **Upload** (local changed) |
+| - | A | not exists | **Upload** (new file) |
+| - | A | exists | **Upload** (overwrite remote) |
 
-After sync completes, a dialog shows the list of files that were actually transferred:
+#### Files Deleted Locally
 
-![Upload Complete](uploaded.png)
+| Saved Meta | Actual File | Remote File | Action |
+|:----------:|:-----------:|:-----------:|--------|
+| A | - | exists | Skip (file stays on remote as "untracked") |
 
-**Push Changes:**
-- Shows files that were **uploaded** to Google Drive
-- Files where "Keep Remote" was selected are NOT shown (only backed up locally)
+### Important Notes
 
-**Pull Changes:**
-- Shows files that were **downloaded** from Google Drive
-- Files where "Keep Local" was selected are NOT shown (only remote is backed up to conflict folder)
+- Push does **NOT** delete remote files
+- Deleted local files become "untracked" on remote (recoverable)
+- Use "Detect Untracked Files" in settings to manage them
 
-**Full Push/Pull:**
-- Shows all files that were actually transferred
-- Displays count of skipped files (unchanged files with matching hash)
+---
 
-The dialog requires clicking "OK" to close, ensuring you see the sync results.
+## Pull Changes (Incremental)
+
+Downloads only changed files from remote to local.
+
+### Flow
+
+1. **Check preconditions**
+   - No remote meta → Nothing to pull
+   - No local meta → Download all remote files
+
+2. **Calculate diff** (for each file)
+   - Compare: Local Meta vs Remote Meta vs Actual File
+
+3. **Handle conflicts** (if any)
+   - Show conflict dialog with diff view
+
+4. **Download changed files**
+
+5. **Delete files removed from remote**
+
+### Decision Tables
+
+#### Files in Both Metas
+
+| Local Meta | Remote Meta | Actual | Action |
+|:----------:|:-----------:|:------:|--------|
+| A | A | A | Skip (unchanged) |
+| A | A | B | Skip (local-only change, upload on next Push) |
+| A | A | - | Skip (local deleted, propagates on next Push) |
+| A | B | A | **Download** (remote changed) |
+| A | B | B | **Conflict** (both changed) |
+| A | B | C | **Conflict** (both changed differently) |
+| A | B | - | **Download** (local deleted + remote updated) |
+
+#### Files Only in Local Meta (Remote Deleted)
+
+| Local Meta | Remote Meta | Actual | Action |
+|:----------:|:-----------:|:------:|--------|
+| A | - | A | **Delete local** (remote deleted) |
+| A | - | B | **Conflict** (local modified, remote deleted) |
+| A | - | - | Nothing (already deleted both sides) |
+
+#### Files Only in Remote Meta (New Remote)
+
+| Local Meta | Remote Meta | Actual | Action |
+|:----------:|:-----------:|:------:|--------|
+| - | A | - | **Download** (new remote file) |
+| - | A | A | Skip (same content, update meta only) |
+| - | A | B | **Conflict** (both have different new files) |
+
+### Why This Approach?
+
+- **Avoids false conflicts**: Local-only changes don't trigger conflicts
+- **Safe overwrites**: Only downloads when remote actually changed
+- **Clear separation**: Push handles uploads, Pull handles downloads
+- **Handles deletions**: Respects intentional deletions while detecting conflicts
+
+---
+
+## Full Push
+
+Uploads entire vault, preserving old remote versions.
+
+### Flow
+
+For each local file:
+
+1. Compare hash with remote
+2. If **same** → Skip (no change needed)
+3. If **different** → Rename remote file (add timestamp) → Upload new version
+
+### Decision Table
+
+| Local File | Remote File | Remote Meta | Hashes | Action |
+|:----------:|:-----------:|:-----------:|:------:|--------|
+| A | exists | hash=A | Same | Skip (unchanged) |
+| B | exists | hash=A | Different | Rename remote → **Upload** B |
+| A | exists | - | - | **Upload** A |
+| A | not exists | - | - | **Upload** A |
+
+### Example
+
+- Local: `notes/daily.md` ≠ Remote: `notes/daily.md`
+- → Rename remote to: `notes/daily_20240124_103000.md` (becomes untracked)
+- → Upload local as: `notes/daily.md`
+
+### Recovery
+
+Old versions become "untracked" and can be:
+- **Restored**: Settings → Detect Untracked Files → Restore Selected
+- **Deleted**: Settings → Detect Untracked Files → Delete Selected
+
+---
+
+## Full Pull
+
+Downloads entire vault, preserving local versions.
+
+### Flow
+
+For each remote file:
+
+1. Compare hash with local
+2. If **same** → Skip (no change needed)
+3. If **different** → Save local to `sync_conflicts/` → Download remote version
+
+### Example
+
+- Local: `notes/daily.md` ≠ Remote: `notes/daily.md`
+- → Save local to: `sync_conflicts/daily_20240124_103000.md`
+- → Download remote as: `notes/daily.md`
+
+### Recovery
+
+Old local versions are saved to `sync_conflicts/` folder:
+- Browse the folder to find backup files
+- Use Settings → Clear conflict files to delete all backups
+
+---
+
+## Conflict Resolution
+
+Conflicts only occur during **Pull** when both local and remote have changes to the same file. A dialog appears:
+
+- File path and timestamps for both versions
+- **Show Diff** button for markdown files (side-by-side comparison)
+- **Keep Local** / **Keep Remote** buttons
+
+| Choice | What Happens |
+|--------|--------------|
+| **Keep Local** | Upload local, save remote to `sync_conflicts/` |
+| **Keep Remote** | Download remote, save local to `sync_conflicts/` |
+
+The unselected version is always backed up for manual merging if needed.
+
+---
+
+## File Recovery
+
+### Scenario 1: Accidentally Deleted File
+
+1. Delete file locally
+2. Push changes → File removed from metadata
+3. **File stays on Google Drive as "untracked"**
+
+**To recover:** Settings → Detect Untracked Files → Select file → Restore Selected
+
+### Scenario 2: Accidentally Overwrote with Full Push
+
+1. Full Push with different local version
+2. **Old remote file renamed with timestamp (untracked)**
+
+**To recover:** Settings → Detect Untracked Files → Select old version → Restore Selected
+
+### Scenario 3: Accidentally Overwrote with Full Pull
+
+1. Full Pull with different remote version
+2. **Old local file saved to `sync_conflicts/`**
+
+**To recover:** Browse `sync_conflicts/` folder and copy file back
+
+---
+
+## Settings
+
+![Settings](settings.png)
+
+| Setting | Description |
+|---------|-------------|
+| Exclude patterns | Glob patterns for files to exclude |
+| Conflict folder | Backup folder name (default: `sync_conflicts`) |
+| Clear conflict files | Delete all backup files |
+| Detect Untracked Files | Find/restore/delete untracked remote files |
+| Full Push | Upload entire vault |
+| Full Pull | Download entire vault |
+
+### Default Exclude Patterns
+
+- `.obsidian/**` - Obsidian config
+- `.**` - Dot files
+- `.*/**` - Dot folders
+- `sync_conflicts/**` - Backup folder
+
+---
 
 ## FAQ
 
 ### Does this work on mobile?
 
-Yes! Works on Android and iOS. Install the same way as desktop.
+Yes! Works on Android and iOS.
 
 ### Must vault names match across devices?
 
-Yes. The plugin uses vault name to identify which vault to sync.
+Yes. The plugin uses vault name to identify the sync target.
 
 ### Can I add files directly to Google Drive?
 
-No. The plugin can only access files it created (security restriction).
+No. The plugin can only access files it created (Google API restriction).
 
 ### Why are files stored flat in Google Drive?
 
-Simpler implementation. Obsidian recreates folder structure from filenames like `folder/subfolder/note.md`.
+Simpler implementation. Folder structure is preserved in filenames like `folder/note.md`.
 
 ### How do I exclude files?
 
@@ -215,16 +353,7 @@ Add glob patterns in settings:
 - `drafts/**` - Exclude drafts folder
 - `**/private/**` - Exclude any "private" folder
 
-### What happens to excluded files already on remote?
-
-Excluded files remain on Google Drive intentionally. This allows different devices to use different exclude patterns. For example:
-- Desktop A: syncs everything
-- Desktop B: excludes `large-assets/**`
-- Mobile: excludes `large-assets/**` and `archives/**`
-
-Each device only downloads/uploads files matching its own exclude patterns, but files excluded on one device can still be synced between other devices.
-
-To clean up excluded files from remote, use **Manage Remote Excluded Files** in settings.
+---
 
 ## Troubleshooting
 
@@ -236,7 +365,6 @@ To clean up excluded files from remote, use **Manage Remote Excluded Files** in 
 ## Support
 
 - [GitHub Issues](https://github.com/takeshy/obsidian-gdrive-vault/issues)
-- [Discord Server](https://discord.com/invite/dPasX4Ac2P)
 
 ## License
 

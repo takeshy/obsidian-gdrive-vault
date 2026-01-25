@@ -22,6 +22,8 @@ export interface ConflictInfo {
 	remoteModifiedTime: string;
 	localHash: string;
 	remoteHash: string;
+	/** True if remote file was deleted (A | - | B conflict) */
+	remoteDeleted?: boolean;
 }
 
 /** User's resolution choice for a conflict */

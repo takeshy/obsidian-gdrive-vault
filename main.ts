@@ -19,7 +19,7 @@ import {
 } from "./actions";
 import { DriveSettings, DEFAULT_CONFLICT_FOLDER, META_FILE_NAME_REMOTE } from "./sync/types";
 import { SyncEngine } from "./sync/sync-engine";
-import { dialogStyles, ConfirmDialog, DeleteExcludedFilesDialog } from "./sync/dialogs";
+import { dialogStyles, ConfirmDialog, DeleteExcludedFilesDialog, UntrackedFilesDialog } from "./sync/dialogs";
 import { t } from "./sync/i18n";
 import { readLocalMeta, shouldExclude, readRemoteMeta, writeRemoteMeta } from "./sync/meta";
 import { OAUTH_CONFIG } from "./config";
@@ -631,6 +631,53 @@ class SyncSettingsTab extends PluginSettingTab {
 
 		// Load excluded files asynchronously
 		this.loadExcludedFiles(excludedFilesList, loadingEl);
+
+		// Untracked remote files management
+		new Setting(containerEl)
+			.setName(t("untrackedFilesButton"))
+			.setDesc(t("untrackedFilesButtonDesc"))
+			.addButton((button) => {
+				button.setButtonText(t("untrackedFilesButton"));
+				button.onClick(async () => {
+					if (!this.plugin.syncEngine) {
+						new Notice(t("syncEngineNotInit"));
+						return;
+					}
+
+					button.setDisabled(true);
+					button.setButtonText(t("loading"));
+
+					try {
+						const untrackedFiles = await this.plugin.syncEngine.getUntrackedFiles();
+						button.setButtonText(t("untrackedFilesButton"));
+						button.setDisabled(false);
+
+						new UntrackedFilesDialog(
+							this.app,
+							untrackedFiles.map(f => ({ id: f.id, name: f.name })),
+							async (fileIds: string[]) => {
+								if (this.plugin.syncEngine) {
+									const deleted = await this.plugin.syncEngine.deleteUntrackedFiles(fileIds);
+									new Notice(t("untrackedFilesDeleted", { count: deleted.toString() }));
+								}
+							},
+							async (fileIds: string[]) => {
+								if (this.plugin.syncEngine) {
+									// Find the file info by id for restore
+									const filesToRestore = untrackedFiles.filter(f => fileIds.includes(f.id));
+									const restored = await this.plugin.syncEngine.restoreUntrackedFiles(filesToRestore);
+									new Notice(t("untrackedFilesRestored", { count: restored.toString() }));
+								}
+							}
+						).open();
+					} catch (err) {
+						console.error("Failed to get untracked files:", err);
+						new Notice(t("loadFailed"));
+						button.setButtonText(t("untrackedFilesButton"));
+						button.setDisabled(false);
+					}
+				});
+			});
 
 		containerEl.createEl("h3", { text: t("fullSyncOperations") });
 
