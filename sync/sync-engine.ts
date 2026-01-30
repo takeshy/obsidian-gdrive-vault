@@ -2,7 +2,7 @@
  * Core sync engine for manual synchronization
  */
 
-import { App, Notice, TFile, Vault } from 'obsidian';
+import { App, Notice, TFile, TFolder, Vault } from 'obsidian';
 import {
 	SyncMeta,
 	SyncDiff,
@@ -798,6 +798,7 @@ export class SyncEngine {
 			}
 
 			// Delete local files (sequential to avoid conflicts)
+			const actuallyDeleted: string[] = [];
 			for (const path of toDelete) {
 				// Skip deletion if backup was required but failed
 				const needsBackup = modifiedDeletes.some(d => d.path === path);
@@ -809,10 +810,16 @@ export class SyncEngine {
 				const file = this.vault.getAbstractFileByPath(path);
 				if (file instanceof TFile) {
 					await this.vault.trash(file, false);
+					actuallyDeleted.push(path);
 				}
 
 				completed++;
 				progress.setProgress(completed, `Deleting: ${path}`);
+			}
+
+			// Delete empty parent directories after file deletions
+			if (actuallyDeleted.length > 0) {
+				await this.deleteEmptyParentDirectories(actuallyDeleted);
 			}
 
 			// Update local meta to match remote
@@ -1361,5 +1368,43 @@ export class SyncEngine {
 		}
 
 		return downloaded;
+	}
+
+	/**
+	 * Delete empty parent directories after files are deleted.
+	 * Traverses up the directory tree and removes empty folders.
+	 */
+	private async deleteEmptyParentDirectories(deletedPaths: string[]): Promise<void> {
+		// Collect all unique parent directories from deleted files
+		const parentDirs = new Set<string>();
+		for (const path of deletedPaths) {
+			const parts = path.split('/');
+			// Remove the filename, keep only directory parts
+			parts.pop();
+			// Add all parent directories (from deepest to root)
+			while (parts.length > 0) {
+				parentDirs.add(parts.join('/'));
+				parts.pop();
+			}
+		}
+
+		// Sort by depth (deepest first) to delete from bottom up
+		const sortedDirs = Array.from(parentDirs).sort((a, b) => {
+			const depthA = a.split('/').length;
+			const depthB = b.split('/').length;
+			return depthB - depthA;
+		});
+
+		// Delete empty directories
+		for (const dirPath of sortedDirs) {
+			const folder = this.vault.getAbstractFileByPath(dirPath);
+			if (folder instanceof TFolder && folder.children.length === 0) {
+				try {
+					await this.vault.trash(folder, false);
+				} catch (err) {
+					console.warn(`Failed to delete empty directory: ${dirPath}`, err);
+				}
+			}
+		}
 	}
 }
