@@ -75,6 +75,52 @@ export default class DriveSyncPlugin extends Plugin {
 	layoutReady: boolean = false;
 	styleEl: HTMLStyleElement | null = null;
 
+	/**
+	 * Ensure access token is valid, refresh if expired or expiring soon
+	 * Returns true if token is valid, false if refresh failed
+	 */
+	ensureValidToken = async (): Promise<boolean> => {
+		// Check if token will expire within 5 minutes
+		const expiryTime = this.settings.accessTokenExpiryTime;
+		const fiveMinutesFromNow = Date.now() + 5 * 60 * 1000;
+
+		if (expiryTime && Number(expiryTime) > fiveMinutesFromNow) {
+			// Token is still valid
+			return true;
+		}
+
+		// Token is expired or expiring soon, refresh it
+		console.log("Access token expired or expiring soon, refreshing...");
+
+		if (!this.settings.refreshToken) {
+			new Notice(t("noRefreshToken"));
+			return false;
+		}
+
+		const res: any = await getAccessToken(
+			this.settings.refreshToken,
+			this.settings.refreshAccessTokenURL,
+			true
+		);
+
+		if (res && res !== "error" && res !== "network_error") {
+			this.settings.accessToken = res.access_token;
+			this.settings.accessTokenExpiryTime = res.expiry_date;
+			this.settings.validToken = true;
+			this.connectedToInternet = true;
+			await this.saveSettings();
+			console.log("Access token refreshed successfully");
+			return true;
+		} else if (res === "network_error") {
+			this.connectedToInternet = false;
+			new Notice(t("networkError"));
+			return false;
+		} else {
+			new Notice(t("tokenRefreshFailed"));
+			return false;
+		}
+	};
+
 	cleanInstall = async () => {
 		try {
 			if (!this.settings.rootFolderId) {
@@ -209,7 +255,8 @@ export default class DriveSyncPlugin extends Plugin {
 				this.syncEngine = new SyncEngine(
 					this.app,
 					() => this.settings,
-					() => this.saveSettings()
+					() => this.saveSettings(),
+					this.ensureValidToken
 				);
 			}
 		} else {
@@ -593,7 +640,8 @@ class SyncSettingsTab extends PluginSettingTab {
 								this.plugin.syncEngine = new SyncEngine(
 									this.app,
 									() => this.plugin.settings,
-									() => this.plugin.saveSettings()
+									() => this.plugin.saveSettings(),
+									this.plugin.ensureValidToken
 								);
 								this.plugin.connectedToInternet = true;
 							}

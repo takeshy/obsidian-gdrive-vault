@@ -85,16 +85,19 @@ export class SyncEngine {
 	private settings: DriveSettings;
 	private getSettings: () => DriveSettings;
 	private saveSettings: () => Promise<void>;
+	private ensureValidToken: () => Promise<boolean>;
 
 	constructor(
 		app: App,
 		getSettings: () => DriveSettings,
-		saveSettings: () => Promise<void>
+		saveSettings: () => Promise<void>,
+		ensureValidToken: () => Promise<boolean>
 	) {
 		this.app = app;
 		this.vault = app.vault;
 		this.getSettings = getSettings;
 		this.saveSettings = saveSettings;
+		this.ensureValidToken = ensureValidToken;
 		this.settings = getSettings();
 	}
 
@@ -106,6 +109,11 @@ export class SyncEngine {
 	 * Refresh files list from GDrive
 	 */
 	async refreshFilesList(): Promise<DriveFileInfo[]> {
+		// Ensure token is valid before API call
+		const tokenValid = await this.ensureValidToken();
+		if (!tokenValid) {
+			throw new Error('Failed to refresh access token');
+		}
 		this.refreshSettings();
 		const filesList = await getFilesList(
 			this.settings.accessToken,
