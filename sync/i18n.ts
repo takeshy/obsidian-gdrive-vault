@@ -105,6 +105,7 @@ const translations = {
 		// Main Plugin Messages
 		networkError: 'Oops! Network error :(',
 		noRefreshToken: 'Or maybe no refresh token provided?',
+		tokenRefreshFailed: 'Failed to refresh access token. Please check your settings.',
 		rootFolderNotExist: 'ERROR: Root folder does not exist. Please reload the plug-in.',
 		rootFolderCheckHint: 'If this error persists, please check if there is a folder named "obsidian" in your Google Drive.',
 		creatingVault: 'Creating vault in Google Drive...',
@@ -278,6 +279,7 @@ const translations = {
 		// Main Plugin Messages
 		networkError: 'ネットワークエラーが発生しました :(',
 		noRefreshToken: 'リフレッシュトークンが設定されていない可能性があります。',
+		tokenRefreshFailed: 'アクセストークンの更新に失敗しました。設定を確認してください。',
 		rootFolderNotExist: 'エラー: ルートフォルダが存在しません。プラグインを再読み込みしてください。',
 		rootFolderCheckHint: 'このエラーが続く場合は、Google Driveに「obsidian」という名前のフォルダがあるか確認してください。',
 		creatingVault: 'Google DriveにVaultを作成中...',
