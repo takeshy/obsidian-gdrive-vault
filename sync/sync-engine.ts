@@ -1337,6 +1337,11 @@ export class SyncEngine {
 	 */
 	async deleteTempFiles(fileIds: string[]): Promise<number> {
 		this.refreshSettings();
+		// Ensure token is valid before API calls
+		const tokenValid = await this.ensureValidToken();
+		if (!tokenValid) {
+			throw new Error('Failed to refresh access token');
+		}
 		let deleted = 0;
 
 		for (const fileId of fileIds) {
