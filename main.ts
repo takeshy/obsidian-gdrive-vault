@@ -40,7 +40,7 @@ const getAccessToken = async (
 			response = res.data;
 		})
 		.catch((err) => {
-			if ((err.code = "ERR_NETWORK") && showError) {
+			if ((err.code === "ERR_NETWORK") && showError) {
 				new Notice(t("networkError"));
 				new Notice(t("noRefreshToken"), 5000);
 				response = "network_error";
